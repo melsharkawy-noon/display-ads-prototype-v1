@@ -1,0 +1,613 @@
+================================================================================
+DISPLAY ADS PROTOTYPE — FULL PROJECT CONTEXT
+================================================================================
+Last Updated: February 9, 2026
+Purpose: Knowledge transfer document for future LLMs, agents, or developers.
+         Contains everything needed to understand, maintain, and extend this app.
+
+================================================================================
+1. PROJECT OVERVIEW
+================================================================================
+
+1a. What This Is
+────────────────
+noon.com is one of the largest e-commerce platforms in the Middle East, operating
+in the UAE, Saudi Arabia, and Egypt. Like any major e-commerce platform, noon
+sells advertising space on its website — banner ads that appear on the homepage,
+search results, product pages, category pages, cart, and checkout. These are
+called "Display Ads."
+
+This prototype is an interactive, high-fidelity mockup of the tool that would be
+used to CREATE those display ad campaigns. Think of it as the "campaign builder"
+— the interface where someone decides: what pages and ad slots to run on, who to
+target, what budget to set, what the ad creative looks like, and when to run it.
+
+It is NOT a production application. There is no backend, no API, no database.
+Everything runs on mock data in the browser. The purpose is to explore and
+validate the UI/UX before real engineering work begins — to get alignment with
+product managers, designers, and stakeholders on how the campaign creation
+experience should work.
+
+1b. Who Uses It (The Two User Types)
+─────────────────────────────────────
+There are two very different users of this tool, and the interface adapts to each:
+
+  SELF-SERVE CAMPAIGNS (code: entryType="seller")
+    These are marketplace sellers — businesses that sell products on noon and want
+    to promote them. They use a simplified, streamlined interface. They only get
+    CPM (pay-per-impression) campaigns, basic targeting, and a straightforward
+    product selection flow for their landing page. Think of a phone accessories
+    seller wanting to boost visibility for their products.
+
+  MANAGED CAMPAIGNS (code: entryType="brand")
+    These are handled by noon's internal Operations team on behalf of large brands
+    (Samsung, Nike, L'Oréal, etc.). The Ops team needs much more control: they
+    can choose between CPM and CPT (pay-per-time-slot) pricing, use advanced
+    compound audience targeting (AND multiple segments together), set per-zone
+    bid multipliers, apply advertising credits, and get detailed budget/spend
+    breakdowns. These campaigns are always budgeted in USD regardless of country.
+
+1c. The Two Pricing Models
+──────────────────────────
+  CPM (Cost Per Mille / Cost Per Thousand Impressions):
+    The advertiser sets a bid for every 1,000 times their ad is shown. They
+    select which page zones to target (or exclude), set a daily or total budget,
+    and the system serves their ads competitively based on their bid. This is the
+    standard model for both self-serve and managed campaigns.
+
+  CPT (Cost Per Time — managed campaigns only):
+    The advertiser buys specific ad slots for specific time periods. Like renting
+    a billboard — you pay a fixed rate for a slot (e.g., "Homepage Hero Banner 1")
+    for specific hours or full days. There's a calendar/availability system that
+    shows which slots are already booked. Ops teams typically reserve slots first
+    (to hold them), then fill in the landing page and creative details later.
+
+1d. The Campaign Creation Flow
+──────────────────────────────
+The user walks through a single scrolling page (not a step-by-step wizard) to
+build a campaign. The sections appear progressively based on earlier choices:
+
+  1. Choose Self-Serve or Managed
+  2. (Managed only) Choose Endemic or Non-Endemic
+     - Endemic = the brand sells products on noon (e.g., Samsung phones)
+     - Non-Endemic = external advertiser, products NOT on noon (e.g., a car brand)
+  3. Select country (UAE, Saudi, Egypt) and marketplace
+  4. Choose pricing model (CPM or CPT)
+  5. Select inventory — which pages and ad zones/slots to run on
+  6. Configure schedule, budget, and bidding
+  7. Build landing page — select products to feature, or provide a URL
+  8. Set up audience targeting (who should see the ads)
+  9. Create ad creatives — upload banners or use the template builder (with
+     optional AI generation of full ad banners)
+  10. Review everything and submit
+
+1e. What the Prototype Demonstrates
+────────────────────────────────────
+  - The full end-to-end campaign creation experience for both user types
+  - How pricing models (CPM vs CPT) change the available options
+  - CPT slot booking with calendar availability and reservation
+  - Advanced audience targeting with compound AND segments
+  - Slot-level bid multipliers with recommendations
+  - Budget transparency (estimated daily spend, credits, out-of-pocket)
+  - AI-powered creative generation (mocked)
+  - Product selection with search and filters for landing pages
+  - A calendar overview showing booked slot inventory across time
+
+1f. Technical Details
+─────────────────────
+Tech Stack:
+  - Next.js 14 (App Router) with React 18, TypeScript
+  - Tailwind CSS for styling
+  - clsx + tailwind-merge via a cn() utility for conditional classnames
+  - Lucide React for icons
+  - date-fns for date utilities
+  - No component library (shadcn-style custom primitives in src/components/ui/)
+
+All data is mocked in src/lib/mock-data.ts. No network requests are made.
+
+Run: npm run dev (port 3000)
+Build: npm run build
+
+================================================================================
+2. NAMING CONVENTIONS & TERMINOLOGY
+================================================================================
+
+IMPORTANT: The codebase uses internal code names that differ from UI labels.
+Always use these UI labels in the interface:
+
+  Code Value          UI Display Label
+  ─────────────────   ─────────────────────
+  entryType="seller"  "Self-Serve Campaign"
+  entryType="brand"   "Managed Campaign"
+  campaignType="internal"    "Endemic"
+  campaignType="third_party" "Non-Endemic"
+  pricingModel="cpm"  "CPM" (Cost Per Mille)
+  pricingModel="cpt"  "CPT" (Cost Per Time)
+
+Domain Terms:
+  - CLP: Category Landing Page (e.g., Electronics, Fashion, Beauty)
+  - Page: A webpage on noon.com (Homepage, Search, PDP, CLPs, Cart, Checkout)
+  - Slot: An individual ad placement on a page (e.g., "Hero Banner 1")
+  - Zone: A group of related slots on a page (e.g., "Hero Banners" groups
+    Hero Banner 1 + Hero Banner 2). Used for CPM grouping.
+  - Endemic: Campaigns for brands/products sold ON noon (Sponsored Display)
+  - Non-Endemic: Campaigns for brands/products NOT sold on noon (third-party)
+  - Express: Fulfilled by noon (noon's warehouse/delivery)
+  - Supermall: Marketplace sellers (third-party fulfillment)
+  - noon: The e-commerce platform (always lowercase "noon")
+
+Budget Notes:
+  - Managed campaigns are ALWAYS in USD regardless of country
+  - Self-serve campaigns use local currency (AED, SAR, EGP)
+
+Time Conventions:
+  - CPT booking days follow a 9 AM to 9 AM convention (not midnight to midnight)
+  - Hourly CPT: Specific hours within a day
+  - Daily CPT: Full 24-hour day booking
+
+================================================================================
+3. APPLICATION ARCHITECTURE
+================================================================================
+
+3a. Top-Level Structure
+───────────────────────
+src/
+├── app/
+│   ├── globals.css          # Tailwind imports + global styles
+│   ├── layout.tsx           # Root layout, wraps app in CampaignProvider
+│   └── page.tsx             # Home page: tab toggle between Builder & Calendar
+├── components/
+│   ├── SinglePageFlow.tsx   # THE main campaign builder (orchestrator, ~1850 lines)
+│   ├── CalendarOverview.tsx # Calendar view of booked slots
+│   ├── sections/            # Extracted section components (see below)
+│   ├── ui/                  # UI primitives (Card, Button, Input, etc.)
+│   ├── layout/              # Layout wrappers
+│   └── wizard/              # Legacy step-by-step wizard (NOT the primary flow)
+├── context/
+│   └── CampaignContext.tsx  # Global campaign draft state (React Context)
+└── lib/
+    ├── types.ts             # All TypeScript interfaces and types
+    ├── mock-data.ts         # All mock data (countries, pages, slots, products, etc.)
+    └── utils.ts             # Utility functions (cn, formatCurrency, formatNumber, etc.)
+
+3b. State Management
+────────────────────
+Global State: CampaignContext (React Context)
+  - draft: CampaignDraft         # The main campaign being built
+  - updateDraft(partial)          # Shallow merge updates
+  - resetDraft()                  # Reset to initialDraft
+  - currentStep / setCurrentStep  # Wizard step tracking (legacy)
+  - completedSteps / markStepComplete  # Step completion tracking (legacy)
+
+Local State: Individual components use useState for UI-specific state
+  (expanded sections, search queries, pagination, form inputs, etc.)
+
+All section components receive their sectionRef as a prop for scroll-spy navigation.
+Some receive additional props for cross-component state (slot multipliers, etc.).
+
+3c. Campaign Builder Flow (SinglePageFlow.tsx)
+──────────────────────────────────────────────
+The primary UI is a single-page multi-step wizard with scroll-spy navigation.
+The left sidebar shows section links; clicking scrolls to that section.
+Sections become visible/relevant based on earlier choices.
+
+Section Progression:
+  1. Entry Type: Self-Serve (seller) vs Managed (brand)
+  2. Campaign Type: Endemic vs Non-Endemic (brand only)
+  3. Country + Marketplace selection
+  4. Pricing Model: CPM vs CPT
+  5. Inventory (Page/Slot selection — varies by pricing model)
+  6. CPT Booking (if CPT) OR Budget/Bidding config (if CPM)
+  7. Landing Page
+  8. Targeting (audience segments, slot targeting)
+  9. Creatives
+  10. Review + Submit
+
+Conditional Section Visibility:
+  - visibleSections is computed in SinglePageFlow.tsx based on draft state
+  - CPT-specific sections only show for pricingModel="cpt"
+  - CPM-specific sections only show for pricingModel="cpm"
+  - Targeting is disabled for CPT campaigns
+  - Some sections differ significantly between seller and brand flows
+
+================================================================================
+4. COMPONENT BREAKDOWN
+================================================================================
+
+4a. SinglePageFlow.tsx (~1850 lines) — THE ORCHESTRATOR
+─────────────────────────────────────────────────────────
+Holds most global UI state and renders the campaign builder layout:
+  - Scroll-spy navigation sidebar
+  - Entry type selection (Self-Serve / Managed toggle)
+  - Campaign type selection (Endemic / Non-Endemic)
+  - Country & marketplace selection
+  - Pricing model selection (CPM / CPT)
+  - Page & slot/zone selection (CPM mode)
+  - Budget configuration (CPM mode, with daily/total toggle)
+  - Budget summary (managed flow: shows daily spend, credits, out-of-pocket)
+  - Review + Submit section (with estimated spend breakdown)
+  - Delegates to section components for complex UI:
+
+Key Local State in SinglePageFlow.tsx:
+  - slotsReserved: boolean (CPT slot reservation status)
+  - slotMultiplier: string (global slot bid multiplier for exclude mode)
+  - slotGroupMultipliers: Record<string, string> (per-page multipliers for include mode)
+  - slotTargetingMode: "all" | "include" | "exclude"
+  - slotPageFilter, slotSearchQuery: for slot list filtering
+  - estimatedReach: number (computed from selected slots)
+  - Various computed values (cptTotalHours, cptTotalCost, etc.)
+
+4b. Section Components (src/components/sections/)
+──────────────────────────────────────────────────
+All are wrapped in React.memo for performance.
+
+CreativesSection.tsx (~910 lines)
+  Props: sectionRef, selectedSlots, missingCreativeSizes
+  Features:
+    - Two modes: "upload" (per-size file upload) and "template" (template builder)
+    - Template builder has two sub-modes:
+      * "Manual Template": User provides logo, EN/AR headlines, product image
+        → Preview composites these into banner templates at each ad size
+      * "AI Generate Full Creative": User provides logo, headlines, description prompt
+        → AI generates complete full-banner ad creatives (mock SVGs with logo + headline baked in)
+        → Preview shows AI banners as full-bleed images at correct aspect ratios
+    - AI generation: mock 2.5s delay, produces 4 style variations (dark/purple, white/blue,
+      yellow/black, teal) at 706x320 aspect ratio, user selects one
+    - Upload mode: 4 cards for each banner size, drag-drop simulation
+    - Template builder shows live preview (mobile/desktop toggle)
+
+  Banner Sizes (all campaigns):
+    - Mobile Hero: 706×320
+    - Mobile Slim: 800×200
+    - Desktop Hero: 1008×200 (EG: 1440×200)
+    - Desktop Slim: 1440×200
+
+LandingPageSection.tsx (~800 lines)
+  Props: sectionRef
+  Features:
+    - Two modes: "Product Selection" or "Direct URL"
+    - Product selection: 3-column layout (Filters | Product List | Selected Products)
+    - Filters: Category checkboxes, Brand checkboxes
+    - Product list: paginated (8 per page), with search bar (name, SKU, brand)
+    - Selected products panel with generated URL preview
+    - Both seller and brand flows use identical UI (was unified in a refactor)
+    - Non-endemic campaigns only get Direct URL option (no product selection)
+
+BrandTargetingSection.tsx (~920 lines)
+  Props: sectionRef, estimatedReach, slotsWithCptBookings,
+         slotMultiplier, onSlotMultiplierChange,
+         slotGroupMultipliers, onSlotGroupMultipliersChange,
+         slotTargetingMode, onSlotTargetingModeChange
+  Features:
+    - TWO tabs: "Audience Targeting" and "Slot Targeting"
+    - Audience Targeting:
+      * Three buckets: Re-engagement, Demographic, In-Market
+      * COMPOUND SEGMENTS: Can AND multiple conditions (even same type)
+      * Staging area: "Add to Segment" buttons populate stagedConditions
+      * Segment Builder: shows staged conditions as AND-chips, bid input, commit button
+      * Right panel: "Added Segments" list showing simple + compound segments
+    - Slot Targeting:
+      * Three modes: "All Zones", "Include Specific", "Exclude Specific"
+      * Include mode: Zones grouped by page, per-page-group multiplier input
+        with inline recommendation (5%/10%/15%/25% based on daily views)
+      * Exclude mode: Flat zone list, single global multiplier
+
+SellerTargetingSection.tsx
+  Props: sectionRef
+  Features:
+    - Simpler targeting: Re-engagement and Demographic only
+    - Individual segment addition (no compound/AND support)
+    - Each segment gets its own bid
+
+BiddingSection.tsx (~390 lines)
+  Props: sectionRef, slotMultiplier, slotGroupMultipliers,
+         slotTargetingMode, estimatedReach
+  Features:
+    - Seller flow: Simple bid input, daily/total budget, pacing
+    - Brand flow: Bid input with slot multiplier display
+      * Shows "Avg Slot Multiplier" when include mode has group multipliers
+      * Win rate / reach / CPC estimates
+    - Frequency capping toggle
+
+CptBookingSection.tsx
+  Props: sectionRef, selectedSlots, slotsReserved, onSlotsReservedChange
+  Features:
+    - Two booking modes: "hourly" and "daily"
+    - Calendar UI for date selection
+    - Hourly mode: Hour grid (0-23) for each selected date
+    - Daily mode: Date range picker, all 24 hours auto-selected
+    - Availability checking against bookedTimeSlots mock data
+    - "Reserve These Slots" button (available in both hourly AND daily modes)
+    - Reservation holds slots before campaign submission
+    - Shows total hours, cost breakdown, conflicts
+
+4c. UI Primitives (src/components/ui/)
+──────────────────────────────────────
+Card.tsx        # Card + CardContent wrapper
+Button.tsx      # Button with variant support
+Input.tsx       # Labeled input field
+Select.tsx      # Labeled select dropdown
+Checkbox.tsx    # Styled checkbox
+Toggle.tsx      # Toggle switch
+Alert.tsx       # Alert banner (info, warning, error)
+RadioCard.tsx   # Selectable card (radio button style)
+Chip.tsx        # Tag/chip component
+ProgressRing.tsx # Circular progress indicator
+Tabs.tsx        # Tab navigation
+
+4d. Other Components
+────────────────────
+CalendarOverview.tsx  # Calendar view showing booked slots across time
+WizardLayout.tsx     # Layout wrapper for wizard (legacy)
+wizard/*.tsx         # Legacy step-by-step wizard components (NOT primary flow)
+
+================================================================================
+5. DATA MODEL (src/lib/types.ts)
+================================================================================
+
+CampaignDraft — The central state object:
+  entryType: "seller" | "brand"
+  ownerType: "self_serve" | "ops_managed"
+  campaignType: "internal" | "third_party"   # Endemic vs Non-Endemic
+  pricingModel: "cpm" | "cpt"
+  country: string                            # "AE", "SA", "EG"
+  marketplace: "noon" | "supermall"
+  pageIds: string[]                          # Selected pages
+  slotIds: string[]                          # Selected slots
+  excludedSlotIds: string[]                  # Excluded slots (CPM)
+  startDate/endDate: Date | null
+  startTime/endTime: string                  # "HH:MM" format
+  noEndDate: boolean
+  budget: number                             # Always USD for managed
+  budgetType: "daily" | "total"
+  bidAmount: number
+  slotBids: Record<string, number>           # Per-slot bids
+  usePerSlotBidding: boolean
+  pacing: "even" | "asap"
+  landingPageMode: "external_url" | "direct_url" | "builder"
+  landingPageUrl: string
+  builderConfig: {                           # Product selection filters + products
+    categories, subcategories, fulfillment, brands, sellers, products: string[]
+  }
+  creatives: Creative[]
+  audienceSegments: AudienceSegment[]        # Targeting segments
+  segments: TargetingSegment[]               # Legacy targeting
+  frequencyCapEnabled: boolean
+  maxViews: number
+  frequencyPeriod: string
+  campaignName: string
+  partnerIds: string[]                       # Attribution (endemic only)
+  attributionBrands/attributionCategories: string[]
+
+AudienceCondition — Individual targeting condition:
+  type: "reengagement" | "demographic" | "in_market"
+  name, description, lookback, category, subcategory, intent
+
+AudienceSegment — A targeting segment (simple or compound):
+  id, type, name, bid, suggestedBid, bidRange
+  conditions?: AudienceCondition[]  # If present, it's a compound AND segment
+
+Slot — An ad placement:
+  id, name, zone (for CPM grouping), pageId, slotType, dimensions,
+  dimensionsByCountry, position, avgDailyViews, cptRateUsd, minCpmUsd,
+  supportedFormats, maxFileSizeMb, viewsPerDay
+
+Page — A noon.com page:
+  id, name, description
+
+================================================================================
+6. MOCK DATA (src/lib/mock-data.ts)
+================================================================================
+
+Countries: AE (UAE), SA (Saudi Arabia), EG (Egypt)
+Marketplaces: noon, Supermall
+
+Pages (48 total):
+  Core: Homepage, Search, PDP, Cart, Checkout
+  CLPs: Electronics (7), Fashion (8), Beauty (6), Home (6),
+        Baby (4), Sports (4), Grocery (5), Other (4)
+
+Slots: ~300+ total
+  Each page gets 6 slots via generateCLPSlots():
+    2x Hero Banners (zone: "Hero Banners")
+    2x Top Fold Units (zone: "Top Fold Units")
+    2x Second Fold Units (zone: "Second Fold Units")
+  Homepage, Search, PDP, Cart have manually defined slots.
+
+Products (66 total):
+  Spread across: Electronics (20), Fashion (11), Beauty (10),
+  Home (7), Grocery (5), Baby (4), Sports (3), Health (2),
+  Toys (2), Automotive (2)
+  Each has: id, name, image (Unsplash URL), price, originalPrice,
+  currency, fulfillment, seller, category, subcategory, brand
+
+Brands: Samsung, Apple, Sony, LG, Nike, Adidas, L'Oréal, Nivea,
+        Nestlé, Pampers, Al Majed Oud, 12dry
+
+Categories (10): Electronics, Fashion, Beauty, Home, Grocery,
+                 Baby, Sports, Health, Automotive, Toys
+  (Most have subcategories)
+
+Sellers: noon, GreenTree, MAISHOP, Trizone, DMKCOOPIC_UAE,
+         GEEKAY, JAJEEK, Elite, Jumbo Electronics, Sharaf DG
+
+Booked Time Slots: Mock availability data for CPT booking calendar.
+  Keys are zone IDs (e.g., hp_hero), values are date→time-range maps.
+
+Targeting Data: targetingActions (re-engagement, demographic),
+  targetingFilters, lookbackOptions (7-90 days)
+
+================================================================================
+7. KEY DESIGN DECISIONS & RATIONALE
+================================================================================
+
+7a. Single-Page Wizard Over Step-By-Step
+  The app originally had a step-by-step wizard (src/components/wizard/).
+  It was replaced with SinglePageFlow.tsx — a single scrolling page with
+  scroll-spy navigation. This gives better context (see all sections),
+  faster navigation, and matches stakeholder preference.
+
+7b. Section Extraction Refactor
+  SinglePageFlow.tsx was originally 7,175 lines. It was decomposed into
+  6 memoized section components to improve performance and maintainability.
+  Each section uses React.memo to prevent unnecessary re-renders.
+
+7c. Compound Audience Segments (Managed Flow Only)
+  Self-serve: Simple segments (one condition = one segment).
+  Managed: Can AND multiple conditions into compound segments.
+  This was a product requirement to support advanced targeting for
+  brands with dedicated Ops support.
+
+7d. Slot Targeting Modes
+  - "All Zones": Campaign runs on all available zones
+  - "Include Specific": Pick zones, each page group gets its own multiplier
+    with a recommendation based on daily views
+  - "Exclude Specific": Pick zones to exclude, single global multiplier
+  The per-group multiplier for include mode was a product requirement
+  to give Ops more granular bidding control.
+
+7e. AI Creative Generation
+  The template builder supports AI generation of FULL ad banners.
+  This is currently mock (2.5s delay, returns SVG placeholders).
+  The AI takes logo + headlines + user prompt and produces complete
+  banners, not just product images. The generated creative fills
+  the entire ad space.
+
+7f. Budget Display (Managed Flow)
+  Budget summary shows: input budget, duration, derived daily/total spend,
+  credits applied, out-of-pocket cost. Even for total budgets, the
+  estimated daily spend is calculated and shown.
+
+7g. Reserve Slots (CPT)
+  Both hourly and daily CPT bookings have a "Reserve These Slots" button.
+  This lets Ops hold inventory while they finish the landing page and
+  creatives. Reservation is a local UI state (not persisted).
+
+================================================================================
+8. KNOWN ISSUES & PRE-EXISTING LINT ERRORS
+================================================================================
+
+These TypeScript errors exist across the codebase and were NOT introduced
+by recent changes. They should be addressed in a future cleanup:
+
+1. HTMLElement | null vs HTMLDivElement | null:
+   Multiple refs in SinglePageFlow.tsx have this mismatch.
+   Fix: Use HTMLElement type instead of HTMLDivElement, or cast.
+
+2. boolean | null vs boolean | undefined:
+   SinglePageFlow.tsx line ~1355. A null check mismatch.
+
+3. StepBidding.tsx references "cpd" pricing model:
+   Dead code referencing a pricing model that doesn't exist in PricingModel type.
+   Also references slot.cpdRateUsd which doesn't exist on the Slot interface.
+
+4. StepBidding.tsx / StepCountryPricing.tsx:
+   Alert component receives className prop it doesn't support.
+
+5. Legacy wizard/ components:
+   These are NOT the primary flow. They may have stale types and props.
+   The primary flow is SinglePageFlow.tsx + sections/*.tsx.
+
+================================================================================
+9. STYLING & UI CONVENTIONS
+================================================================================
+
+Color System:
+  primary-*: Blue scale (Tailwind blue-50 through blue-900)
+  noon-yellow: #feee00 (noon brand color)
+  noon-dark: #404553
+
+  Standard semantic colors:
+    green-*: Success, positive actions, credits applied
+    red-*: Errors, removal, negative actions
+    amber-*: Warnings, express fulfillment badges
+    violet-*: AI features (generation, AI badges)
+    purple-*: Supermall fulfillment badges
+
+Layout:
+  - Max width: max-w-7xl (1280px)
+  - Sticky top nav at z-50
+  - Sticky section nav sidebar
+  - Cards use rounded-xl with subtle shadows
+  - Section spacing: scroll-mt-36 for scroll-spy offset
+
+Typography:
+  - Font: Inter (Google Fonts)
+  - Section headers: text-lg font-semibold
+  - Labels: text-sm font-medium
+  - Body text: text-sm text-gray-600
+  - Tiny text: text-xs, text-[10px], text-[11px]
+
+Interactive Patterns:
+  - Toggles use cn() for active/inactive states
+  - Active: primary-500 bg, white text
+  - Inactive: gray-100 bg, gray-600 text
+  - Hover: hover:bg-gray-200 or similar
+  - Cards: border with hover:border-gray-300 transition
+
+================================================================================
+10. EXTENDING THE APPLICATION
+================================================================================
+
+Adding a New Section:
+  1. Create src/components/sections/YourSection.tsx
+  2. Wrap in React.memo, accept sectionRef prop
+  3. Use useCampaign() for draft state access
+  4. Import and render in SinglePageFlow.tsx
+  5. Add to visibleSections logic if conditionally shown
+  6. Add scroll-spy ID matching the sidebar navigation
+
+Adding New Mock Data:
+  1. Define interface in src/lib/types.ts
+  2. Add data to src/lib/mock-data.ts
+  3. Import where needed
+
+Adding New Campaign Draft Fields:
+  1. Add to CampaignDraft interface in types.ts
+  2. Add default value to initialDraft in types.ts
+  3. Use updateDraft({ newField: value }) in components
+
+Common Patterns:
+  - Conditional rendering based on draft.entryType, draft.campaignType,
+    draft.pricingModel
+  - Two-column layouts for selection panels (filters | items | selected)
+  - Card-based sections with consistent header patterns
+  - Toggle buttons for mode switches (not radio buttons)
+
+================================================================================
+11. FILE SIZE REFERENCE (approximate line counts)
+================================================================================
+
+SinglePageFlow.tsx       ~1,850 lines
+BrandTargetingSection.tsx ~920 lines
+LandingPageSection.tsx   ~800 lines
+CreativesSection.tsx     ~910 lines
+CptBookingSection.tsx    ~650 lines
+BiddingSection.tsx       ~390 lines
+SellerTargetingSection.tsx ~400 lines
+mock-data.ts             ~1,680 lines
+types.ts                 ~253 lines
+CalendarOverview.tsx     ~500 lines
+
+================================================================================
+12. QUICK REFERENCE: HOW FLOWS DIFFER
+================================================================================
+
+                          Self-Serve (seller)    Managed (brand)
+                          ──────────────────     ──────────────────
+Campaign Type step?       No (always endemic)    Yes (endemic/non-endemic)
+Pricing Model?            CPM only               CPM or CPT
+Budget currency?          Local (AED/SAR/EGP)    Always USD
+Targeting?                Simple segments         Compound AND segments
+Slot targeting modes?     N/A                    All/Include/Exclude
+Slot multipliers?         N/A                    Per-group (include) or global (exclude)
+Credits?                  No                     Yes (budget summary)
+Landing page?             Product sel. or URL     Same (endemic) / URL only (non-endemic)
+Creatives?                Same                   Same
+Reserve slots? (CPT)      N/A (no CPT)           Yes (hourly + daily)
+Budget summary detail?    Basic                  Shows daily spend, credits, out-of-pocket
+Submit review detail?     Basic                  Shows estimated spend, credits, win rate
+
+================================================================================
+END OF DOCUMENT
+================================================================================

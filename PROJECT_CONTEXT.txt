@@ -1,7 +1,7 @@
 ================================================================================
 DISPLAY ADS PROTOTYPE — FULL PROJECT CONTEXT
 ================================================================================
-Last Updated: February 9, 2026
+Last Updated: February 9, 2026 (reviewed and corrected for cohesion)
 Purpose: Knowledge transfer document for future LLMs, agents, or developers.
          Contains everything needed to understand, maintain, and extend this app.
 
@@ -65,21 +65,36 @@ There are two very different users of this tool, and the interface adapts to eac
 1d. The Campaign Creation Flow
 ──────────────────────────────
 The user walks through a single scrolling page (not a step-by-step wizard) to
-build a campaign. The sections appear progressively based on earlier choices:
+build a campaign. The sections appear progressively based on earlier choices.
+The country selector lives in the left sidebar and is always available — it is
+NOT a section step.
 
-  1. Choose Self-Serve or Managed
-  2. (Managed only) Choose Endemic or Non-Endemic
-     - Endemic = the brand sells products on noon (e.g., Samsung phones)
-     - Non-Endemic = external advertiser, products NOT on noon (e.g., a car brand)
-  3. Select country (UAE, Saudi, Egypt) and marketplace
-  4. Choose pricing model (CPM or CPT)
-  5. Select inventory — which pages and ad zones/slots to run on
-  6. Configure schedule, budget, and bidding
-  7. Build landing page — select products to feature, or provide a URL
-  8. Set up audience targeting (who should see the ads)
-  9. Create ad creatives — upload banners or use the template builder (with
-     optional AI generation of full ad banners)
-  10. Review everything and submit
+The two flows differ significantly:
+
+  SELF-SERVE (seller) flow:
+    1. Entry type is set (Self-Serve) via the header dropdown
+    2. Schedule & Details — campaign name, start/end dates, budget, marketplace
+    3. Landing Page — select products or provide a URL
+    4. Targeting — simple audience segments (re-engagement, demographic)
+    5. Creatives — upload banners or use the template builder
+    6. Review + Submit
+
+  MANAGED (brand) flow:
+    1. Entry type is set (Managed) via the header dropdown
+    2. Campaign Type — Endemic or Non-Endemic
+       - Endemic = the brand sells products on noon (e.g., Samsung phones)
+       - Non-Endemic = external advertiser, products NOT on noon (e.g., a car brand)
+    3. Pricing Model — CPM or CPT
+    4. (CPM) Schedule, budget, slot/zone selection OR (CPT) Slot selection + calendar booking
+    5. Landing Page — select products or provide a URL
+    6. (CPM only) Targeting — compound audience segments + slot targeting with multipliers
+    7. (CPM only) Bidding — bid amount, frequency capping, budget pacing
+    8. Creatives — upload banners or use the template builder
+    9. Review + Submit (with estimated spend, credits, out-of-pocket)
+
+  See sections 13 (scroll-spy), 16 (budget math), 17 (multipliers), 18 (compound
+  targeting), 19 (CPT booking), 20 (landing page), 21 (creatives) in Part II
+  for deep implementation details on each step.
 
 1e. What the Prototype Demonstrates
 ────────────────────────────────────
@@ -130,7 +145,7 @@ Domain Terms:
   - Slot: An individual ad placement on a page (e.g., "Hero Banner 1")
   - Zone: A group of related slots on a page (e.g., "Hero Banners" groups
     Hero Banner 1 + Hero Banner 2). Used for CPM grouping.
-  - Endemic: Campaigns for brands/products sold ON noon (Sponsored Display)
+  - Endemic: Campaigns for brands/products sold ON noon (code: campaignType="internal")
   - Non-Endemic: Campaigns for brands/products NOT sold on noon (third-party)
   - Express: Fulfilled by noon (noon's warehouse/delivery)
   - Supermall: Marketplace sellers (third-party fulfillment)
@@ -187,28 +202,26 @@ Some receive additional props for cross-component state (slot multipliers, etc.)
 
 3c. Campaign Builder Flow (SinglePageFlow.tsx)
 ──────────────────────────────────────────────
-The primary UI is a single-page multi-step wizard with scroll-spy navigation.
+The primary UI is a single-page scrolling wizard with scroll-spy navigation.
 The left sidebar shows section links; clicking scrolls to that section.
 Sections become visible/relevant based on earlier choices.
 
-Section Progression:
-  1. Entry Type: Self-Serve (seller) vs Managed (brand)
-  2. Campaign Type: Endemic vs Non-Endemic (brand only)
-  3. Country + Marketplace selection
-  4. Pricing Model: CPM vs CPT
-  5. Inventory (Page/Slot selection — varies by pricing model)
-  6. CPT Booking (if CPT) OR Budget/Bidding config (if CPM)
-  7. Landing Page
-  8. Targeting (audience segments, slot targeting)
-  9. Creatives
-  10. Review + Submit
+The country selector is in the sidebar (not a section). The entry type is set
+via a dropdown in the sticky header bar.
 
-Conditional Section Visibility:
+See section 1d for the per-flow step breakdown. The key section IDs used
+internally are:
+  Seller:    entry, seller-schedule, landing, seller-targeting, creatives
+  Brand CPM: entry, campaign-type, pricing-model, schedule, landing, targeting, bidding, creatives
+  Brand CPT: entry, campaign-type, pricing-model, cpt-calendar, landing, creatives
+
+Conditional Section Visibility (detailed in section 13):
   - visibleSections is computed in SinglePageFlow.tsx based on draft state
   - CPT-specific sections only show for pricingModel="cpt"
   - CPM-specific sections only show for pricingModel="cpm"
-  - Targeting is disabled for CPT campaigns
+  - Targeting and Bidding are only shown for CPM campaigns
   - Some sections differ significantly between seller and brand flows
+  - Later sections only appear when earlier prerequisites are met (e.g., budget ≥ 100)
 
 ================================================================================
 4. COMPONENT BREAKDOWN
@@ -299,15 +312,17 @@ SellerTargetingSection.tsx
     - Individual segment addition (no compound/AND support)
     - Each segment gets its own bid
 
-BiddingSection.tsx (~390 lines)
+BiddingSection.tsx (~390 lines) — MANAGED CPM FLOW ONLY
   Props: sectionRef, slotMultiplier, slotGroupMultipliers,
          slotTargetingMode, estimatedReach
   Features:
-    - Seller flow: Simple bid input, daily/total budget, pacing
-    - Brand flow: Bid input with slot multiplier display
+    - Bid input with slot multiplier display
       * Shows "Avg Slot Multiplier" when include mode has group multipliers
       * Win rate / reach / CPC estimates
     - Frequency capping toggle
+  NOTE: The self-serve (seller) flow does NOT use this component. Seller budget
+  and bid inputs are embedded directly in the "seller-schedule" section within
+  SinglePageFlow.tsx.
 
 CptBookingSection.tsx
   Props: sectionRef, selectedSlots, slotsReserved, onSlotsReservedChange
@@ -607,6 +622,574 @@ Creatives?                Same                   Same
 Reserve slots? (CPT)      N/A (no CPT)           Yes (hourly + daily)
 Budget summary detail?    Basic                  Shows daily spend, credits, out-of-pocket
 Submit review detail?     Basic                  Shows estimated spend, credits, win rate
+
+================================================================================
+PART II — DETAILED IMPLEMENTATION REFERENCE
+================================================================================
+The sections above (1-12) are the general context — start there if you're new.
+Everything below is deep implementation detail — formulas, state wiring,
+conditional logic, and the exact mechanics needed to modify any part of this app.
+Cross-references to Part I sections are included where relevant.
+
+================================================================================
+13. SCROLL-SPY NAVIGATION (SinglePageFlow.tsx)
+================================================================================
+(Expands on section 3c above)
+
+The left sidebar highlights which section the user is currently viewing.
+This is powered by a scroll-spy system. (The header bar shows the entry type
+dropdown and Save/Submit buttons — it does NOT display the active section.)
+
+How it works:
+  1. sectionRefs = useRef<Record<string, HTMLDivElement | null>>({})
+     Each section component receives a ref callback: ref={el => sectionRefs.current["section-id"] = el}
+
+  2. Three section lists exist depending on flow:
+     - getCPMSections(): entry, campaign-type, pricing-model, schedule, landing, targeting, bidding, creatives
+     - getCPTSections(): entry, campaign-type, pricing-model, cpt-calendar, landing, creatives
+     - getSellerSections(): entry, seller-schedule, landing, seller-targeting, creatives
+     SECTIONS = useMemo based on draft.entryType and draft.pricingModel
+
+  3. visibleSections (useMemo) determines which sections are rendered:
+     Seller flow: ["entry", "seller-schedule", then "landing"+"seller-targeting"+"creatives"
+       if campaignName is set, startDate exists, and budget >= 100]
+     Brand CPM: ["entry", "campaign-type", "pricing-model", "schedule", then
+       "landing"+"targeting"+"bidding"+"creatives" if startDate exists and budget >= 100]
+     Brand CPT: ["entry", "campaign-type", "pricing-model", then "cpt-calendar"
+       if slotIds.length > 0, then "landing"+"creatives" if cptTotalHours > 0]
+
+  4. Scroll event listener checks getBoundingClientRect().top for each visible
+     section. The last one whose top is above headerOffset (150px) wins.
+
+  5. scrollToSection() programmatically scrolls and sets isScrollingRef=true
+     for 800ms to prevent the scroll spy from fighting the animation.
+
+Sidebar navigation:
+  - Each nav item shows an icon + label
+  - Non-visible sections are hidden (opacity-0, h-0)
+  - Active section: primary-500 bg, white text, font-semibold
+  - Completed (above active): green dot indicator
+  - Below sidebar: Country selector (always visible, changes draft.country)
+
+================================================================================
+14. STATE WIRING BETWEEN COMPONENTS
+================================================================================
+
+SinglePageFlow.tsx owns these states and passes them down:
+
+  State Variable            Passed To                  As Props
+  ─────────────────────     ───────────────────────     ──────────────
+  slotsReserved             CptBookingSection           slotsReserved, onSlotsReservedChange
+  slotMultiplier            BrandTargetingSection       slotMultiplier, onSlotMultiplierChange
+                            BiddingSection              slotMultiplier
+  slotGroupMultipliers      BrandTargetingSection       slotGroupMultipliers, onSlotGroupMultipliersChange
+                            BiddingSection              slotGroupMultipliers
+  slotTargetingMode         BrandTargetingSection       slotTargetingMode, onSlotTargetingModeChange
+                            BiddingSection              slotTargetingMode
+  estimatedReach (computed) BrandTargetingSection       estimatedReach
+                            BiddingSection              estimatedReach
+  slotsWithCptBookings      BrandTargetingSection       slotsWithCptBookings
+  selectedSlots (derived)   CreativesSection            selectedSlots
+                            CptBookingSection           selectedSlots
+  missingCreativeSizes      CreativesSection            missingCreativeSizes
+
+All section components also receive a sectionRef callback to register their
+DOM element for scroll-spy.
+
+Components that DON'T receive extra props (self-contained, read draft directly):
+  - LandingPageSection (only sectionRef)
+  - SellerTargetingSection (only sectionRef)
+
+useCredits and availableCredits live in SinglePageFlow.tsx (not in context)
+because credits are only used in the budget summary and submit review sections,
+both of which are rendered directly in SinglePageFlow.tsx.
+
+================================================================================
+15. ESTIMATED REACH CALCULATION
+================================================================================
+
+Location: SinglePageFlow.tsx, estimatedReach useMemo
+
+  1. Determine relevant slots based on pricing model + targeting mode:
+     - CPT: only selectedSlots (draft.slotIds)
+     - CPM "all": all slots
+     - CPM "include": slots matching draft.slotIds (or all if none selected)
+     - CPM "exclude": all slots minus draft.excludedSlotIds
+
+  2. Sum avgDailyViews of all relevant slots
+
+  3. Apply targeting factor:
+     totalRules = sum of rules across all draft.segments
+     0 rules → factor 1.0
+     1-2 rules → factor 0.6
+     3-4 rules → factor 0.3
+     5+ rules → factor 0.1
+
+     ⚠ NOTE: This uses draft.segments (the legacy TargetingSegment[] field),
+     NOT draft.audienceSegments (the newer AudienceSegment[] field). The current
+     targeting UI (BrandTargetingSection, SellerTargetingSection) writes to
+     draft.audienceSegments, which means the targeting factor is effectively
+     always 1.0 in practice because draft.segments stays empty. This is a known
+     inconsistency. If you want reach to respond to targeting changes, update
+     this formula to count draft.audienceSegments instead.
+
+  4. Apply frequency cap factor:
+     If enabled: min(1, maxViews / 5)
+     If disabled: 1.0
+
+  5. Result = round(totalViews * targetingFactor * frequencyFactor)
+
+================================================================================
+16. BUDGET & SPEND CALCULATIONS (Managed CPM Flow)
+================================================================================
+(Expands on sections 7f and 12 above)
+
+16a. Budget Summary (right side of schedule section)
+─────────────────────────────────────────────────────
+  campaignDays = ceil((endDate - startDate) / oneDay) + 1, or null if no end date
+  isDaily = draft.budgetType === "daily"
+  dailySpend = isDaily ? budget : (campaignDays ? budget / campaignDays : null)
+  maxTotal = isDaily ? (campaignDays ? budget * campaignDays : null) : budget
+  creditsAvailable = availableCredits.USD (hardcoded mock: $5,000)
+  creditApplied = useCredits ? min(creditsAvailable, maxTotal || budget) : 0
+  finalCost = (maxTotal || budget) - creditApplied
+
+  Display rules:
+  - Shows input budget (daily or total)
+  - If campaignDays known: shows derived metric (daily→max total, total→daily)
+  - If no end date: shows "Ongoing" note, hints to set end date for daily calc
+  - Credits line: "Credits: -$X" with "(remaining: $Y)"
+  - Final line: "Out-of-Pocket: $Z" or "$0 (Covered)" if fully credited
+
+16b. Submit Review Section (CPM)
+────────────────────────────────
+  avgBid = average of audienceSegments bids, fallback to draft.bidAmount or $5
+  slotMultiplierValue:
+    - include mode with group multipliers: average of all group multiplier values
+    - otherwise: single slotMultiplier value
+  effectiveAvgBid = avgBid * (1 + slotMultiplierValue / 100)
+  winRate = effectiveAvgBid < $3 → 30%, < $6 → 60%, else → 85%
+  effectiveDailyBudget:
+    - daily budget type: draft.budget directly
+    - total budget type: draft.budget / campaignDays (or full budget if no duration)
+  estDailyViews = round(min(estimatedReach, (effectiveDailyBudget / effectiveAvgBid) * 1000) * (winRate / 100))
+  estTotalViews = estDailyViews * campaignDays (if known)
+  estDailySpend = (estDailyViews * effectiveAvgBid) / 1000
+  estTotalSpend = estDailySpend * campaignDays (if known)
+  creditApplied = useCredits ? min(creditsAvail, estTotalSpend) : 0
+  outOfPocket = max(0, estTotalSpend - creditApplied)
+
+  Display: 4-column grid (Budget, Schedule, Est. Views, Win Rate)
+  Then: "Estimated Spend Summary" bar with Est. Spend, Budget Cap,
+  Avg Bid (eff.), Credits toggle, Out-of-Pocket
+
+16c. Credits
+────────────
+  Mock credit balances (hardcoded in SinglePageFlow.tsx):
+    USD: $5,000  |  AED: 18,500  |  SAR: 19,000  |  EGP: 155,000
+  useCredits is a local boolean toggle in SinglePageFlow.tsx.
+  Credits UI appears in both the budget summary and submit review.
+
+================================================================================
+17. SLOT MULTIPLIER SYSTEM (Managed Flow Only)
+================================================================================
+(Expands on section 7d above)
+
+Slot multipliers increase the effective bid for specific ad zones.
+
+Two modes:
+
+  INCLUDE MODE (slotTargetingMode === "include"):
+    Per-page-group multipliers. slotGroupMultipliers: Record<pageId, string>
+    When user includes zones, they're grouped by page in the right panel.
+    Each page group gets an input field for its multiplier %.
+    Recommendation logic (inline "Rec: X%" text):
+      >5M views/day → 5%
+      >1M views/day → 10%
+      >500K views/day → 15%
+      Otherwise → 25%
+    BiddingSection computes average of all group multipliers for display.
+
+  EXCLUDE MODE (slotTargetingMode === "exclude"):
+    Single global multiplier (slotMultiplier: string, default "0").
+    Applies to all remaining (non-excluded) slots.
+
+  ALL ZONES MODE:
+    No multiplier UI shown.
+
+Where multiplier is used:
+  - BrandTargetingSection: input fields and display
+  - BiddingSection: shows multiplier value, uses it in effective bid calc
+  - SinglePageFlow submit review: uses averaged value for spend estimates
+
+================================================================================
+18. COMPOUND AUDIENCE SEGMENTS (BrandTargetingSection.tsx)
+================================================================================
+(Expands on section 7c above)
+
+The managed flow allows ANDing multiple targeting conditions into one segment.
+
+Data model:
+  AudienceCondition: { type, name, description, lookback, category, subcategory, intent }
+  AudienceSegment: { id, type, name, bid, suggestedBid, bidRange, conditions?: AudienceCondition[] }
+  If conditions[] is present, it's compound. The top-level type/name are summaries.
+
+UI flow:
+  1. User browses three targeting buckets: Re-engagement, Demographic, In-Market
+  2. Each bucket has dropdowns/options. Clicking "Add to Segment" adds an
+     AudienceCondition to stagedConditions[] (local state).
+  3. The "Segment Builder" area shows staged conditions as chips with "AND" labels.
+  4. User enters a bid for the compound segment.
+  5. Clicking "Add Segment →" calls commitStagedSegment() which creates a new
+     AudienceSegment with the conditions[] array and adds it to draft.audienceSegments.
+  6. The right panel shows all added segments. Compound segments display their
+     sub-conditions as AND-joined chips.
+
+Bid range for compound segments:
+  getStagedBidRange() computes min/max across all staged conditions,
+  then adds a +10% premium per additional condition beyond the first.
+
+Self-serve (seller) flow does NOT have this. SellerTargetingSection adds
+simple one-condition-per-segment entries directly.
+
+================================================================================
+19. CPT BOOKING SYSTEM (CptBookingSection.tsx)
+================================================================================
+
+Two modes: "hourly" and "daily"
+
+Hourly Mode:
+  - Calendar for picking individual dates
+  - Hour grid (0-23) for each selected date
+  - Toggle individual hours on/off
+  - Checks availability against bookedTimeSlots mock data
+  - Shows conflicts per hour (which campaign booked it)
+  - selectedCptHours: Record<dateStr, number[]> tracks chosen hours
+
+Daily Mode:
+  - Start date + End date pickers
+  - All 24 hours auto-selected for each day in range
+  - useEffect syncs selectedCptHours when dates change
+  - Same availability checking
+
+Both modes:
+  - "Reserve These Slots" button: sets slotsReserved=true (lifted to SinglePageFlow)
+  - "Release Slots" button to undo
+  - Total hours = sum of all selected hours across all dates
+  - Total cost = totalHours * slot.cptRateUsd
+  - Updates draft.startDate and draft.endDate based on selected range
+
+The CptBookingSection updates the global draft (startDate, endDate) so
+SinglePageFlow can compute cptTotalHours and cptTotalCost for the
+visibleSections gate and submit review.
+
+================================================================================
+20. LANDING PAGE PRODUCT SELECTION (LandingPageSection.tsx)
+================================================================================
+
+Three-column layout: Filters (col-3) | Product List (col-5) | Selected (col-4)
+
+Filters:
+  - Category checkboxes (from categories mock data)
+  - Brand checkboxes (from brands mock data)
+  - Both update draft.builderConfig.categories / draft.builderConfig.brands
+
+Product Search:
+  - productSearch state: text input above product list
+  - Filters filteredProducts by name, id, brand, category (case-insensitive)
+  - Resets pagination on search change
+  - Shows empty state "No products found" when 0 results
+
+Filtering logic (filteredProducts useMemo):
+  1. Start with all products
+  2. If categories or subcategories selected: filter by category/subcategory match
+  3. If fulfillment selected: filter by fulfillment match
+  4. If brands selected: filter by brand match
+  5. If sellers selected: filter by seller match
+  6. If search text: filter by name/id/brand/category containing query
+  Result is paginated (productsPerPage = 8)
+
+Selected products panel:
+  - Shows product cards with remove button
+  - Generated URL preview: noon.com/[country]-en/collection?products=[ids]
+  - Copy URL button
+
+Both seller and brand endemic flows use identical product selection UI.
+Non-endemic (third_party) campaigns only show Direct URL input.
+
+================================================================================
+21. CREATIVE TEMPLATE BUILDER (CreativesSection.tsx)
+================================================================================
+
+The creatives section has two top-level modes:
+  "upload": Manual per-size file upload (4 cards for each banner dimension)
+  "template": Template builder with live preview
+
+Template Builder Sub-Modes (imageSourceMode state):
+  "upload" (Manual Template):
+    Left panel: Logo upload, EN headline, AR headline, Product image upload
+    Right panel: Live preview compositing logo + headline + product image
+    into each banner size (mobile hero, mobile slim, desktop hero, desktop slim)
+    Preview has mobile/desktop toggle (templatePreviewDevice state)
+
+  "ai" (AI Generate Full Creative):
+    Left panel: Logo upload, EN headline, AR headline (same inputs — these are
+    context for the AI), then a textarea for describing the ad + "Generate" button
+    Context chips show which inputs the AI will use (logo, EN headline, AR headline)
+    Right panel: Shows AI-generated full-banner images directly (not composited)
+    Empty state shows a prompt to fill in logo/headline and describe the vision
+
+AI Generation Mock:
+  generateAiBanners() function:
+    - 2.5 second setTimeout delay
+    - Returns 4 inline SVG data URIs (706x320 viewBox) with different color schemes
+    - Each SVG bakes in: a "LOGO" placeholder box, the headline text (URL-encoded),
+      a "Shop Now" CTA button, and a device silhouette for the product area
+    - Variations: dark/purple, white/blue, yellow/black, teal/green gradient
+    - User selects from a 2x2 grid of banner-shaped thumbnails
+    - Selected banner shown in preview at correct aspect ratios for each ad size
+    - "AI Generated" badge overlay on previews
+
+State:
+  - creativeMode: "upload" | "template"
+  - imageSourceMode: "upload" | "ai"
+  - templateLogo, templateHeadline, templateHeadlineAr, templateImage: string
+  - templateBackgroundColor: string (default "#FFFFFF")
+  - templatePreviewDevice: "mobile" | "desktop"
+  - aiPrompt, aiGenerating, aiGeneratedBanners: string[], aiSelectedIndex: number
+
+================================================================================
+22. CALENDAR OVERVIEW (CalendarOverview.tsx)
+================================================================================
+
+A separate tab (not the campaign builder) showing booked slot availability
+across a month calendar. Accessed via the "Calendar Overview" tab in the top nav.
+
+This is a read-only view for Ops to see inventory utilization.
+It reads from the bookedTimeSlots and bookedDates mock data.
+
+================================================================================
+23. LEGACY WIZARD COMPONENTS (src/components/wizard/)
+================================================================================
+
+DO NOT USE OR MODIFY THESE. They are remnants of an older step-by-step wizard
+approach that was replaced by SinglePageFlow.tsx. Files include:
+  StepAttribution.tsx, StepBidding.tsx, StepCampaignConfig.tsx,
+  StepCountryPricing.tsx, StepCreatives.tsx, StepGeneralSettings.tsx,
+  StepLandingPage.tsx, StepReview.tsx, StepSchedule.tsx,
+  StepServingControls.tsx, StepSlotSelection.tsx, index.ts
+
+These have stale types and TypeScript errors. They are NOT rendered anywhere
+in the current flow. Ignore them unless explicitly asked to clean up.
+
+================================================================================
+24. IMPORTANT GOTCHAS & THINGS TO WATCH OUT FOR
+================================================================================
+
+1. SHALLOW MERGE: updateDraft() does a shallow merge ({ ...prev, ...updates }).
+   For nested objects like builderConfig, you must spread the inner object too:
+   updateDraft({ builderConfig: { ...draft.builderConfig, products: newProducts } })
+
+2. LARGE FILES: SinglePageFlow.tsx is ~1850 lines. Section files are 400-920 lines.
+   When editing, use precise search/replace. Read before editing.
+
+3. DUPLICATE UI: The seller and brand flows in LandingPageSection.tsx have nearly
+   identical JSX. Changes must be applied to BOTH. When using string replace,
+   the same block may appear twice — use replace_all or add unique context.
+
+4. REF TYPE MISMATCH: sectionRefs uses HTMLDivElement | null but section callbacks
+   pass HTMLElement | null. This causes TS errors. Pre-existing, not critical.
+
+5. PERFORMANCE: The original 7,175-line monolith caused lag because any state
+   change re-rendered everything. The fix was React.memo on each section component.
+   A useEffect was also introduced to replace a setTimeout inside render that was
+   causing cascading re-renders in the daily CPT booking sync.
+
+6. MOCK IMAGES: Product images use Unsplash URLs (may break if URLs expire).
+   Template builder mock images are inline SVG data URIs (stable, self-contained).
+
+7. ENTRY TYPE SIDE EFFECTS: Switching entryType in the header dropdown
+   triggers side effects:
+   seller → sets ownerType="self_serve", landingPageMode="builder", pricingModel="cpm"
+   brand → sets ownerType="ops_managed" (other fields keep current values)
+
+8. NO END DATE: Some CPM campaigns can run indefinitely (draft.noEndDate=true).
+   Budget summary and submit review must handle null campaignDays gracefully.
+   For no-end-date with daily budget, show "Ongoing" and skip total calculations.
+
+9. SECTION VISIBILITY GATES:
+   Seller: needs campaignName + startDate + budget>=100 to unlock later sections
+   Brand CPM: needs startDate + budget>=100
+   Brand CPT: needs slotIds.length>0 to show calendar, then cptTotalHours>0 for rest
+
+================================================================================
+25. COMPLETE STATE INVENTORY
+================================================================================
+
+25a. Global State (CampaignContext — accessible via useCampaign())
+  draft: CampaignDraft (see section 5 for full field list)
+  updateDraft: (updates: Partial<CampaignDraft>) => void
+  resetDraft: () => void
+  currentStep: number (legacy, not used in SinglePageFlow)
+  setCurrentStep: (step: number) => void (legacy)
+  totalSteps: number (legacy)
+  completedSteps: Set<number> (legacy)
+  markStepComplete: (step: number) => void (legacy)
+
+25b. SinglePageFlow.tsx Local State
+  activeSection: string — currently highlighted nav item
+  sectionRefs: ref Record — DOM elements for scroll-spy
+  budgetStr: string — text input for budget field
+  bidAmountStr: string — text input for bid field
+  useCredits: boolean — whether credits toggle is on
+  slotsReserved: boolean — CPT slot reservation
+  showStartDatePicker / showEndDatePicker: boolean — date picker visibility
+  datePickerMonth: Date — currently displayed month in date picker
+  slotTargetingMode: "all" | "include" | "exclude"
+  slotPageFilter: string — filter slots by page in CPM pricing section
+  slotSearchQuery: string — search slots in CPM pricing section
+  showStartPicker / showEndPicker: boolean — seller schedule date pickers
+  calendarMonth / endCalendarMonth: Date — seller schedule calendar months
+  slotMultiplier: string — global multiplier (exclude mode)
+  slotGroupMultipliers: Record<string, string> — per-page multipliers (include mode)
+  isScrollingRef: ref boolean — prevents scroll-spy during programmatic scroll
+
+25c. CreativesSection.tsx Local State
+  creativeMode: "upload" | "template"
+  selectedPreviewCreative: Creative | null
+  templateLogo: string
+  templateHeadline: string (default "Galaxy S24 Ultra - Now Available")
+  templateHeadlineAr: string (default Arabic equivalent)
+  templateImage: string (inline SVG of a phone by default)
+  templateBackgroundColor: string ("#FFFFFF")
+  templatePreviewDevice: "mobile" | "desktop"
+  imageSourceMode: "upload" | "ai"
+  aiPrompt: string
+  aiGenerating: boolean
+  aiGeneratedBanners: string[]
+  aiSelectedIndex: number
+
+25d. LandingPageSection.tsx Local State
+  sectionsExpanded: { categories: boolean, brands: boolean }
+  productPage: number — current page of product list
+  selectedProductPage: number — current page of selected products
+  productSearch: string — search query for products
+
+25e. BrandTargetingSection.tsx Local State
+  brandTargetingCategory: string | null — active targeting bucket tab
+  showBrandBulkBidMenu: boolean
+  brandCustomBulkBid: string
+  slotPageFilter: string — filter for slot targeting zone list
+  slotSearchQuery: string — search for slot targeting
+  showAllCptConflicts: boolean
+  stagedConditions: AudienceCondition[] — compound segment staging area
+  segmentBid: string — bid input for staged compound segment
+  (various form inputs for re-engagement, demographic, in-market dropdowns)
+
+25f. CptBookingSection.tsx Local State
+  cptBookingMode: "hourly" | "daily"
+  cptStartDate / cptEndDate: Date | null
+  selectedCptHours: Record<string, number[]>
+  cptCalendarMonth: Date
+  (various UI toggles for hour selection, conflict display)
+
+25g. SellerTargetingSection.tsx Local State
+  sellerTargetingCategory: string | null
+  sellerTargetingSearch: string
+  (form inputs: reengAction, reengLookback, reengFilter, reengFilterValue,
+   demoAction, demoFilter, demoFilterValue, reengBid, demoBid)
+
+25h. BiddingSection.tsx Local State (managed CPM flow only)
+  (Largely stateless — derives values from draft and props via useMemo)
+
+================================================================================
+26. SECTION-BY-SECTION JSX STRUCTURE (SinglePageFlow.tsx)
+================================================================================
+
+The main return JSX follows this structure:
+
+  <div> (min-h-screen bg-gray-50)
+    <header> (sticky top-14 z-40) — Entry type dropdown + campaign label + Save/Submit buttons
+    <div> (max-w-7xl flex gap-6)
+      <aside> (w-48 sticky) — Country selector + Section nav
+      <main> (flex-1 space-y-6)
+        ── "entry" section ─────────────────
+        Card: Shown only when draft.entryType is not set
+        ── "campaign-type" section (brand only) ──
+        Card: Endemic vs Non-Endemic radio cards
+        ── "pricing-model" section (brand only) ──
+        Card: CPM vs CPT selection + slot picker (CPT mode)
+        ── "schedule" section (brand CPM) ──
+        Card: Campaign name, date pickers, budget input, budget type toggle,
+              budget summary (right column)
+        ── "seller-schedule" section (seller) ──
+        Card: Campaign name, start/end dates, budget, marketplace
+        ── "cpt-calendar" section (brand CPT) ──
+        <CptBookingSection />
+        ── "landing" section ──
+        <LandingPageSection />
+        ── "targeting" section (brand CPM) ──
+        <BrandTargetingSection />
+        ── "seller-targeting" section (seller) ──
+        <SellerTargetingSection />
+        ── "bidding" section (brand CPM) ──
+        <BiddingSection />
+        ── "creatives" section ──
+        <CreativesSection />
+        ── Submit/Review section (rendered when enough sections visible) ──
+        Card: CPT review OR CPM review with spend estimates
+
+================================================================================
+27. HOW TO ADD A FEATURE (Step-by-Step)
+================================================================================
+
+Example: Adding a "Dayparting" feature to the managed CPM flow
+
+  1. types.ts: Add fields to CampaignDraft
+     daypartingEnabled: boolean
+     daypartingHours: number[]  // hours of day to run (0-23)
+     Add defaults to initialDraft: daypartingEnabled: false, daypartingHours: []
+
+  2. Choose where to add UI:
+     - New section? Create src/components/sections/DaypartingSection.tsx
+     - Inside existing section? Add to BrandTargetingSection.tsx or BiddingSection.tsx
+
+  3. If new section:
+     - Wrap in React.memo
+     - Accept sectionRef prop, plus any lifted state props
+     - Use useCampaign() for draft access
+     - Add section ID to getCPMSections() in SinglePageFlow.tsx
+     - Add to visibleSections logic
+     - Import and render in SinglePageFlow.tsx main JSX
+     - Pass sectionRef callback
+
+  4. Update calculations if needed:
+     - If dayparting affects reach: update estimatedReach useMemo
+     - If it affects spend: update submit review calculations
+     - If it affects budget summary: update budget summary JSX
+
+  5. Check TypeScript compiles: npx tsc --noEmit
+     Ignore pre-existing errors (see section 8).
+     Fix any NEW errors in your files.
+
+================================================================================
+28. USER PREFERENCES & COMMUNICATION STYLE
+================================================================================
+
+Based on all interactions with the project owner:
+
+  - They are non-technical (don't know code details), but have strong product vision
+  - They care deeply about UI consistency between flows
+  - They want features described in business terms, not code terms
+  - When something looks wrong visually, they'll say "it's cropped" or "there's lag"
+    and expect the developer to diagnose the root cause
+  - They iterate frequently — expect requests to change recently added features
+  - They care about both flows (self-serve and managed) looking consistent
+    unless there's a specific reason for them to differ
+  - "Brand" always means "Managed Campaign" in their vocabulary
+  - "Seller" always means "Self-Serve Campaign"
+  - They reference real brands (Samsung, Nike) as examples
+  - They want the prototype to feel real (realistic mock data, actual Unsplash images)
 
 ================================================================================
 END OF DOCUMENT

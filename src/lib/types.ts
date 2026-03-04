@@ -205,6 +205,141 @@ export interface CampaignDraft {
   attributionCategories: string[];
 }
 
+// ─── Sales Intake Types ─────────────────────────────────────────────────────
+
+export type BookingStatus =
+  | "draft"
+  | "pending_approval"
+  | "approved"
+  | "rejected"
+  | "ready_for_ops";
+
+export type AdvertiserType = "1P" | "3P" | "marketplace";
+export type IntakeCurrency = "USD" | "AED";
+
+export const AD_ASSET_TYPES = [
+  "Display – On Deck",
+  "Noon CRM (Social/Email/Push/WhatsApp)",
+  "Digital Media (Google/Meta/TikTok/etc)",
+  "ATL",
+  "BTL",
+  "Influencers",
+  "Data & Management Fees",
+] as const;
+
+export type AdAssetType = (typeof AD_ASSET_TYPES)[number];
+
+export const COMMERCIAL_CATEGORIES = [
+  "Electronics",
+  "Fashion",
+  "Beauty & Personal Care",
+  "Home & Living",
+  "Grocery & Essentials",
+  "Baby & Kids",
+  "Sports & Outdoors",
+  "Health & Wellness",
+  "Automotive",
+  "Entertainment & Media",
+  "Financial Services",
+  "Telecom",
+  "FMCG",
+  "Other",
+] as const;
+
+export const DELAYED_PAYMENT_OPTIONS = [
+  "None",
+  "Net 30",
+  "Net 45",
+  "Net 60",
+  "Net 90",
+] as const;
+
+export interface ActivityLogEntry {
+  id: string;
+  timestamp: Date;
+  action: string;
+  actor: string;
+  detail?: string;
+}
+
+export interface BookingIntake {
+  id: string;
+  bookingName: string;
+  salesEmail: string;
+  partnerLeCode: string;
+  brandCode: string;
+  advertiserType: AdvertiserType | "";
+  advertiserCountry: string;
+  campaignCountry: string;
+  brandBusiness: string;
+  commercialCategory: string;
+  commercialPoc: string;
+
+  finalBudget: number;
+  discountPercent: number;
+  currency: IntakeCurrency;
+  delayedPayment: string;
+  invoicingMethod: string;
+
+  adAssetTypes: AdAssetType[];
+  needsCreativeServices: boolean;
+
+  mediaBriefFileName: string;
+  mediaBriefUploaded: boolean;
+
+  status: BookingStatus;
+  approvalLink: string;
+  brandEditableFields: string[];
+  approvedAt: Date | null;
+  approvedBy: string;
+  activityLog: ActivityLogEntry[];
+
+  createdAt: Date;
+}
+
+export const FIXED_CPM_ASSUMPTION = 5; // $5 CPM for V1 forecast
+export const AED_TO_USD_RATE = 0.2723; // 1 AED ≈ 0.2723 USD (mocked)
+export const HIGH_BUDGET_THRESHOLD = 500_000; // USD — triggers manual review
+export const MIN_BUDGET_USD = 100; // Same threshold as campaign builder ($100 minimum)
+
+export function createInitialBooking(): BookingIntake {
+  const now = new Date();
+  const id = `BK-${Date.now().toString(36).toUpperCase()}`;
+  return {
+    id,
+    bookingName: "",
+    salesEmail: "sales.user@noon.com",
+    partnerLeCode: "",
+    brandCode: "",
+    advertiserType: "",
+    advertiserCountry: "",
+    campaignCountry: "",
+    brandBusiness: "",
+    commercialCategory: "",
+    commercialPoc: "",
+    finalBudget: 0,
+    discountPercent: 0,
+    currency: "USD",
+    delayedPayment: "None",
+    invoicingMethod: "",
+    adAssetTypes: [],
+    needsCreativeServices: false,
+    mediaBriefFileName: "",
+    mediaBriefUploaded: false,
+    status: "draft",
+    approvalLink: "",
+    brandEditableFields: ["finalBudget", "adAssetTypes"],
+    approvedAt: null,
+    approvedBy: "",
+    activityLog: [
+      { id: "1", timestamp: now, action: "Created", actor: "sales.user@noon.com" },
+    ],
+    createdAt: now,
+  };
+}
+
+// ─── Campaign Draft ─────────────────────────────────────────────────────────
+
 export const initialDraft: CampaignDraft = {
   entryType: "brand",
   ownerType: "ops_managed",

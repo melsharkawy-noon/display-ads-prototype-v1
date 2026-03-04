@@ -1,7 +1,7 @@
 ================================================================================
 DISPLAY ADS PROTOTYPE — FULL PROJECT CONTEXT
 ================================================================================
-Last Updated: February 9, 2026 (reviewed and corrected for cohesion)
+Last Updated: February 9, 2026 (added validation + brand preview to Sales Intake)
 Purpose: Knowledge transfer document for future LLMs, agents, or developers.
          Contains everything needed to understand, maintain, and extend this app.
 
@@ -174,12 +174,14 @@ src/
 ├── components/
 │   ├── SinglePageFlow.tsx   # THE main campaign builder (orchestrator, ~1850 lines)
 │   ├── CalendarOverview.tsx # Calendar view of booked slots
+│   ├── SalesIntakePage.tsx  # Sales Intake page (booking intake form + approval flow)
 │   ├── sections/            # Extracted section components (see below)
 │   ├── ui/                  # UI primitives (Card, Button, Input, etc.)
 │   ├── layout/              # Layout wrappers
 │   └── wizard/              # Legacy step-by-step wizard (NOT the primary flow)
 ├── context/
-│   └── CampaignContext.tsx  # Global campaign draft state (React Context)
+│   ├── CampaignContext.tsx  # Global campaign draft state (React Context)
+│   └── IntakeContext.tsx    # Sales intake booking state (React Context)
 └── lib/
     ├── types.ts             # All TypeScript interfaces and types
     ├── mock-data.ts         # All mock data (countries, pages, slots, products, etc.)
@@ -600,8 +602,10 @@ CreativesSection.tsx     ~910 lines
 CptBookingSection.tsx    ~650 lines
 BiddingSection.tsx       ~390 lines
 SellerTargetingSection.tsx ~400 lines
+SalesIntakePage.tsx      ~580 lines
+BrandPreviewPage.tsx     ~340 lines
 mock-data.ts             ~1,680 lines
-types.ts                 ~253 lines
+types.ts                 ~350 lines (was ~253, added intake types)
 CalendarOverview.tsx     ~500 lines
 
 ================================================================================
@@ -1190,6 +1194,120 @@ Based on all interactions with the project owner:
   - "Seller" always means "Self-Serve Campaign"
   - They reference real brands (Samsung, Nike) as examples
   - They want the prototype to feel real (realistic mock data, actual Unsplash images)
+
+================================================================================
+29. SALES INTAKE PAGE (SalesIntakePage.tsx)
+================================================================================
+(Added February 2026)
+
+A separate top-level page (tab in the nav) that replaces a Google Form process.
+It creates a "Booking Intake" object — NOT a campaign — for the Sales → Brand
+Approval → Ops handoff flow.
+
+29a. Navigation
+  The top nav now has three tabs: Campaign Builder | Calendar Overview | Sales Intake
+  Active tab is stored in page.tsx as state: "builder" | "calendar" | "intake".
+
+29b. Data Model
+  BookingIntake interface (types.ts) — separate from CampaignDraft:
+    id, bookingName, salesEmail, partnerLeCode, brandCode, advertiserType,
+    advertiserCountry, campaignCountry, brandBusiness, commercialCategory,
+    commercialPoc, finalBudget, discountPercent, currency (USD|AED),
+    delayedPayment, invoicingMethod, adAssetTypes (multi-select),
+    needsCreativeServices (bool), mediaBriefFileName, mediaBriefUploaded,
+    status (BookingStatus), approvalLink, brandEditableFields, approvedAt,
+    approvedBy, activityLog (ActivityLogEntry[]), createdAt.
+
+  BookingStatus: "draft" | "pending_approval" | "approved" | "rejected" | "ready_for_ops"
+
+  Constants in types.ts:
+    AD_ASSET_TYPES — 7 asset types (only "Display – On Deck" is operationalized)
+    COMMERCIAL_CATEGORIES — 14 categories
+    DELAYED_PAYMENT_OPTIONS — None, Net 30/45/60/90
+    FIXED_CPM_ASSUMPTION — $5 (for forecast)
+    AED_TO_USD_RATE — 0.2723 (mocked FX)
+    HIGH_BUDGET_THRESHOLD — $500K (triggers manual review warning)
+    MIN_BUDGET_USD — $100 (same as campaign builder minimum)
+
+29c. State Management
+  IntakeContext (context/IntakeContext.tsx):
+    intake: BookingIntake, updateIntake(partial), resetIntake()
+    convertedIntakeId: string | null (tracks which intake was converted)
+  Wrapped in IntakeProvider in layout.tsx, alongside CampaignProvider.
+
+29d. Page Layout (SalesIntakePage.tsx)
+  Two-column layout: 8/12 left (form cards) + 4/12 right (status/forecast/actions).
+
+  Left column (form sections):
+    Section 1 — Booking Overview: name, LE code, brand, advertiser type, countries, etc.
+      Commercial POC only shown when advertiserType === "1P".
+    Section 2 — Budget & Commercial Terms: budget, discount%, currency toggle, payment terms.
+      Live "Budget Summary" box: gross, discount%, net (with AED→USD conversion note).
+    Section 3 — Campaign Meta: multi-select ad asset types, creative services toggle.
+      "Display – On Deck" has an "Operationalized" badge.
+    Section 4 — Media Brief Upload: mock file upload with replace/remove.
+
+  Right column (sticky sidebar):
+    Status badge card (with approved timestamp if applicable).
+    Forecast Preview: estimated impressions = netBudget / $5 CPM * 1000.
+      - "Looks feasible" when net budget ≥ $100 and ≤ $500K
+      - "Manual review recommended" when > $500K
+      - "Budget below minimum — forecast unavailable" when net < $100
+    Brand Approval panel:
+      Draft: brand-editable fields checkboxes + "Send for Approval" button.
+      Pending: approval link (copy to clipboard) + "Preview as Brand" button
+        + simulate Approve/Reject buttons.
+      Approved: "Mark Ready for Ops" button.
+    Ops Action panel (shown when approved/ready): "Convert to Campaign" CTA.
+      Both "Send for Approval" and "Convert to Campaign" are gated by validation.
+    Activity Log: timeline of all status transitions.
+
+29d-ii. Validation (aligned with campaign builder)
+  useValidation() hook inside SalesIntakePage:
+    Required fields: bookingName, partnerLeCode, brandCode, advertiserType,
+      advertiserCountry, campaignCountry, finalBudget, adAssetTypes (≥1).
+    commercialPoc required when advertiserType === "1P".
+    Net budget (after discount, converted to USD if AED) must be ≥ $100
+      (MIN_BUDGET_USD, same as campaign builder's budget >= 100 gate).
+  Inline errors shown on each field when showErrors=true (triggered by
+    attempting Send for Approval or Convert to Campaign when invalid).
+  ValidationSummary alert lists all issues at page top.
+  Budget Summary box turns red/amber when net budget is below minimum.
+
+29d-iii. Brand Preview (BrandPreviewPage.tsx)
+  Full-screen overlay (z-60) with a violet/purple "Brand Approval View" banner.
+  Opened via "Preview as Brand" button (appears after sending for approval).
+  Reads from the same IntakeContext — changes sync instantly.
+
+  Field display rules:
+    - Fields in intake.brandEditableFields → rendered as editable inputs
+    - All other fields → rendered as read-only with a Lock icon
+  Brand actions (when status === "pending_approval"):
+    - "Save Changes" — logs edit to activity log
+    - "Approve" — sets status to "approved", records timestamp + approver
+    - "Reject" — sets status to "rejected"
+  After action, status change is immediately reflected in the Sales Intake page
+    when the brand preview is closed (same React state tree).
+  Includes a field legend explaining the Lock vs editable distinction.
+  Shows budget summary and forecast (same calculations as sales view).
+
+29e. Convert to Campaign Flow
+  When "Convert to Campaign" is clicked (page.tsx handleConvertToCampaign):
+    1. Resets the campaign draft
+    2. Prefills: entryType="brand", ownerType="ops_managed",
+       campaignType based on advertiserType (3P→third_party, else→internal),
+       country, campaignName, budget (net, converted to USD if AED)
+    3. Switches to the "builder" tab
+  Does NOT prefill: targeting, slots, bid, creatives (ops sets these manually).
+  If currency is AED: shows a warning in the Ops Action panel about manual conversion.
+
+29f. Files Added/Modified
+  NEW: src/components/SalesIntakePage.tsx (~580 lines, with validation)
+  NEW: src/components/BrandPreviewPage.tsx (~340 lines)
+  NEW: src/context/IntakeContext.tsx
+  MODIFIED: src/lib/types.ts (added BookingIntake types + constants + MIN_BUDGET_USD)
+  MODIFIED: src/app/layout.tsx (added IntakeProvider)
+  MODIFIED: src/app/page.tsx (added "intake" tab + convert handler + brand preview overlay)
 
 ================================================================================
 END OF DOCUMENT

@@ -1,7 +1,7 @@
 ================================================================================
 DISPLAY ADS PROTOTYPE — FULL PROJECT CONTEXT
 ================================================================================
-Last Updated: February 9, 2026 (added validation + brand preview to Sales Intake)
+Last Updated: February 9, 2026 (added Sales Requests list page)
 Purpose: Knowledge transfer document for future LLMs, agents, or developers.
          Contains everything needed to understand, maintain, and extend this app.
 
@@ -174,7 +174,8 @@ src/
 ├── components/
 │   ├── SinglePageFlow.tsx   # THE main campaign builder (orchestrator, ~1850 lines)
 │   ├── CalendarOverview.tsx # Calendar view of booked slots
-│   ├── SalesIntakePage.tsx  # Sales Intake page (booking intake form + approval flow)
+│   ├── SalesRequestsPage.tsx # Sales Requests list page (booking intake pipeline)
+│   ├── SalesIntakePage.tsx  # Sales Intake detail page (booking intake form + approval flow)
 │   ├── sections/            # Extracted section components (see below)
 │   ├── ui/                  # UI primitives (Card, Button, Input, etc.)
 │   ├── layout/              # Layout wrappers
@@ -602,10 +603,11 @@ CreativesSection.tsx     ~910 lines
 CptBookingSection.tsx    ~650 lines
 BiddingSection.tsx       ~390 lines
 SellerTargetingSection.tsx ~400 lines
-SalesIntakePage.tsx      ~580 lines
+SalesRequestsPage.tsx    ~280 lines
+SalesIntakePage.tsx      ~590 lines
 BrandPreviewPage.tsx     ~340 lines
 mock-data.ts             ~1,680 lines
-types.ts                 ~350 lines (was ~253, added intake types)
+types.ts                 ~530 lines (was ~253, added intake types + mock bookings)
 CalendarOverview.tsx     ~500 lines
 
 ================================================================================
@@ -1205,8 +1207,11 @@ It creates a "Booking Intake" object — NOT a campaign — for the Sales → Br
 Approval → Ops handoff flow.
 
 29a. Navigation
-  The top nav now has three tabs: Campaign Builder | Calendar Overview | Sales Intake
-  Active tab is stored in page.tsx as state: "builder" | "calendar" | "intake".
+  The top nav now has three tabs: Campaign Builder | Calendar Overview | Sales Requests
+  Active tab is stored in page.tsx as state: "builder" | "calendar" | "requests".
+  The "Sales Requests" tab shows the list by default; opening a booking shows the
+  detail page (SalesIntakePage) as a sub-view within the same tab.
+  See section 30 for the list page details.
 
 29b. Data Model
   BookingIntake interface (types.ts) — separate from CampaignDraft:
@@ -1293,21 +1298,88 @@ Approval → Ops handoff flow.
 
 29e. Convert to Campaign Flow
   When "Convert to Campaign" is clicked (page.tsx handleConvertToCampaign):
-    1. Resets the campaign draft
-    2. Prefills: entryType="brand", ownerType="ops_managed",
+    1. Sets booking status to "converted"
+    2. Resets the campaign draft
+    3. Prefills: entryType="brand", ownerType="ops_managed",
        campaignType based on advertiserType (3P→third_party, else→internal),
        country, campaignName, budget (net, converted to USD if AED)
-    3. Switches to the "builder" tab
+    4. Switches to the "builder" tab
   Does NOT prefill: targeting, slots, bid, creatives (ops sets these manually).
   If currency is AED: shows a warning in the Ops Action panel about manual conversion.
 
-29f. Files Added/Modified
-  NEW: src/components/SalesIntakePage.tsx (~580 lines, with validation)
-  NEW: src/components/BrandPreviewPage.tsx (~340 lines)
-  NEW: src/context/IntakeContext.tsx
-  MODIFIED: src/lib/types.ts (added BookingIntake types + constants + MIN_BUDGET_USD)
-  MODIFIED: src/app/layout.tsx (added IntakeProvider)
-  MODIFIED: src/app/page.tsx (added "intake" tab + convert handler + brand preview overlay)
+================================================================================
+30. SALES REQUESTS LIST PAGE (SalesRequestsPage.tsx)
+================================================================================
+(Added February 2026)
+
+A table/list view that acts as the primary entry point for the Sales Intake
+workflow. Shows all booking intake requests with status, budget, and actions.
+
+30a. Navigation
+  The top nav tab is "Sales Requests" (replaces the old "Sales Intake" tab).
+  Sub-navigation within the tab:
+    - List view (SalesRequestsPage): default when clicking the tab
+    - Detail view (SalesIntakePage): shown when opening/creating a booking
+  Managed via showIntakeDetail boolean in page.tsx.
+
+30b. Multi-Booking State (IntakeContext refactored)
+  IntakeContext now stores:
+    bookings: BookingIntake[] — the full list (initialized with 6 mock bookings)
+    activeBookingId: string | null — which booking is being viewed/edited
+    intake: BookingIntake — derived from activeBookingId (same API as before)
+    updateIntake(partial) — updates the active booking in the list
+    createBooking() — creates a new BookingIntake, adds to list, selects it
+    selectBooking(id) — sets activeBookingId
+    deleteBooking(id) — removes from list
+  All existing SalesIntakePage + BrandPreviewPage code works unchanged since
+  they still use intake/updateIntake from the same hook.
+
+30c. BookingStatus Update
+  Added "converted" status: shown when a booking has been converted to a campaign.
+  BookingIntake now also has a lastUpdated: Date field (auto-set by updateIntake).
+
+30d. Mock Seed Data
+  6 bookings seeded on first load (createMockBookings() in types.ts):
+    Samsung Galaxy S25 Launch — approved, $250K, UAE, 1P
+    Nike Summer Collection — pending_approval, $150K, KSA, 3P
+    L'Oréal Beauty Festival — ready_for_ops, $80K, UAE, 1P
+    Adidas Egypt Ramadan — draft, $45K, Egypt, 3P
+    Nestlé KSA Always-On — converted, $320K, KSA, 1P
+    Nivea Winter Skincare — rejected, 25K AED, UAE, marketplace
+
+30e. Table Columns
+  Booking Name (with amber AlertCircle if draft + incomplete)
+  Brand (resolved from brandCode → brands mock data)
+  LE Code (hidden on small screens)
+  Advertiser Type (1P / 3P / Marketplace)
+  Campaign Country
+  Net Budget (computed: finalBudget * (1 - discountPercent/100))
+  Status (colored badge with dot)
+  Created By (email, hidden on small screens)
+  Last Updated (date + time)
+  Actions (Edit for drafts, View for others)
+
+30f. Search + Filters
+  Free-text search: matches bookingName, brandCode, brand name, LE code, email
+  Status filter: dropdown (single select)
+  Country filter: dropdown
+  Advertiser Type filter: dropdown
+  Sort: lastUpdated (default desc), netBudget, status — toggleable asc/desc
+
+30g. Empty States
+  No bookings at all: centered card with CTA "Create your first booking"
+  Filters yield no results: "No matching requests" with "Clear all filters"
+
+30h. Row Click
+  Clicking a table row calls selectBooking(id) and shows the SalesIntakePage.
+  SalesIntakePage now has a "Back to Sales Requests" link at the top.
+
+30i. Files Added/Modified
+  NEW: src/components/SalesRequestsPage.tsx (~280 lines)
+  MODIFIED: src/context/IntakeContext.tsx (multi-booking: bookings[], select, create, delete)
+  MODIFIED: src/lib/types.ts (added "converted" status, lastUpdated field, createMockBookings())
+  MODIFIED: src/components/SalesIntakePage.tsx (back nav, "converted" status config, status set)
+  MODIFIED: src/app/page.tsx (replaced "intake" tab with "requests", list↔detail sub-nav)
 
 ================================================================================
 END OF DOCUMENT

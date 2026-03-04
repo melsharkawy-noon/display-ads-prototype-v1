@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { SinglePageFlow } from "@/components/SinglePageFlow";
 import { CalendarOverview } from "@/components/CalendarOverview";
+import { SalesRequestsPage } from "@/components/SalesRequestsPage";
 import { SalesIntakePage } from "@/components/SalesIntakePage";
 import { BrandPreviewPage } from "@/components/BrandPreviewPage";
 import { useIntake } from "@/context/IntakeContext";
@@ -10,13 +11,32 @@ import { useCampaign } from "@/context/CampaignContext";
 import { AED_TO_USD_RATE } from "@/lib/types";
 import { PlusCircle, Calendar, LayoutGrid, ClipboardList } from "lucide-react";
 
-type Tab = "builder" | "calendar" | "intake";
+type Tab = "builder" | "calendar" | "requests";
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<Tab>("builder");
+  const [showIntakeDetail, setShowIntakeDetail] = useState(false);
   const [brandPreviewOpen, setBrandPreviewOpen] = useState(false);
-  const { intake } = useIntake();
+  const { intake, selectBooking, createBooking } = useIntake();
   const { updateDraft, resetDraft } = useCampaign();
+
+  const handleOpenBooking = useCallback(
+    (id: string) => {
+      selectBooking(id);
+      setShowIntakeDetail(true);
+    },
+    [selectBooking]
+  );
+
+  const handleNewBooking = useCallback(() => {
+    createBooking();
+    setShowIntakeDetail(true);
+  }, [createBooking]);
+
+  const handleBackToList = useCallback(() => {
+    selectBooking(null);
+    setShowIntakeDetail(false);
+  }, [selectBooking]);
 
   const handleConvertToCampaign = useCallback(() => {
     resetDraft();
@@ -42,13 +62,14 @@ export default function Home() {
       totalBudget: Math.round(budgetUsd),
     });
 
+    setShowIntakeDetail(false);
     setActiveTab("builder");
   }, [intake, resetDraft, updateDraft]);
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: "builder", label: "Campaign Builder", icon: <PlusCircle className="w-4 h-4" /> },
     { id: "calendar", label: "Calendar Overview", icon: <Calendar className="w-4 h-4" /> },
-    { id: "intake", label: "Sales Intake", icon: <ClipboardList className="w-4 h-4" /> },
+    { id: "requests", label: "Sales Requests", icon: <ClipboardList className="w-4 h-4" /> },
   ];
 
   return (
@@ -68,7 +89,12 @@ export default function Home() {
               {tabs.map((tab) => (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
+                  onClick={() => {
+                    setActiveTab(tab.id);
+                    if (tab.id !== "requests") {
+                      setShowIntakeDetail(false);
+                    }
+                  }}
                   className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
                     activeTab === tab.id
                       ? "border-primary-500 text-primary-600 bg-primary-50/50"
@@ -89,10 +115,14 @@ export default function Home() {
       {/* Content */}
       {activeTab === "builder" && <SinglePageFlow />}
       {activeTab === "calendar" && <CalendarOverview />}
-      {activeTab === "intake" && (
+      {activeTab === "requests" && !showIntakeDetail && (
+        <SalesRequestsPage onOpenBooking={handleOpenBooking} onNewBooking={handleNewBooking} />
+      )}
+      {activeTab === "requests" && showIntakeDetail && (
         <SalesIntakePage
           onConvertToCampaign={handleConvertToCampaign}
           onOpenBrandPreview={() => setBrandPreviewOpen(true)}
+          onBackToList={handleBackToList}
         />
       )}
 

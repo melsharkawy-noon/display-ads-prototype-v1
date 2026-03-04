@@ -32,6 +32,7 @@ import {
   CheckCircle,
   XCircle,
   ArrowRight,
+  ArrowLeft,
   DollarSign,
   Eye,
   TrendingUp,
@@ -53,6 +54,7 @@ const STATUS_CONFIG: Record<BookingStatus, { label: string; color: string; bg: s
   approved: { label: "Approved by Brand", color: "text-green-700", bg: "bg-green-50" },
   rejected: { label: "Rejected", color: "text-red-700", bg: "bg-red-50" },
   ready_for_ops: { label: "Ready for Ops", color: "text-primary-700", bg: "bg-primary-50" },
+  converted: { label: "Converted to Campaign", color: "text-green-700", bg: "bg-green-50" },
 };
 
 const COUNTRY_OPTIONS = [
@@ -137,9 +139,10 @@ function ValidationSummary({ errors }: { errors: ValidationErrors }) {
 interface SalesIntakePageProps {
   onConvertToCampaign: () => void;
   onOpenBrandPreview: () => void;
+  onBackToList: () => void;
 }
 
-export function SalesIntakePage({ onConvertToCampaign, onOpenBrandPreview }: SalesIntakePageProps) {
+export function SalesIntakePage({ onConvertToCampaign, onOpenBrandPreview, onBackToList }: SalesIntakePageProps) {
   const { intake, updateIntake } = useIntake();
   const { errors, isValid } = useValidation();
   const [showErrors, setShowErrors] = React.useState(false);
@@ -211,6 +214,7 @@ export function SalesIntakePage({ onConvertToCampaign, onOpenBrandPreview }: Sal
       setShowErrors(true);
       return;
     }
+    updateIntake({ status: "converted" });
     addLogEntry("Converted to managed campaign", "ops.user@noon.com");
     onConvertToCampaign();
   };
@@ -230,6 +234,13 @@ export function SalesIntakePage({ onConvertToCampaign, onOpenBrandPreview }: Sal
       {/* Page Header */}
       <div className="flex items-center justify-between">
         <div>
+          <button
+            onClick={onBackToList}
+            className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-primary-600 mb-1.5 transition-colors"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            Back to Sales Requests
+          </button>
           <h1 className="text-2xl font-bold text-gray-900">Sales Intake</h1>
           <p className="text-sm text-gray-500 mt-1">
             Create a booking intake for brand approval and ops handoff

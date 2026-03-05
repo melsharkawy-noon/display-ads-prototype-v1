@@ -40,7 +40,6 @@ import {
   AlertTriangle,
   BarChart3,
   ClipboardList,
-  Palette,
   Paperclip,
   Shield,
   Activity,
@@ -137,12 +136,11 @@ function ValidationSummary({ errors }: { errors: ValidationErrors }) {
 // ── Main Component ──────────────────────────────────────────────────────────
 
 interface SalesIntakePageProps {
-  onConvertToCampaign: () => void;
   onOpenBrandPreview: () => void;
   onBackToList: () => void;
 }
 
-export function SalesIntakePage({ onConvertToCampaign, onOpenBrandPreview, onBackToList }: SalesIntakePageProps) {
+export function SalesIntakePage({ onOpenBrandPreview, onBackToList }: SalesIntakePageProps) {
   const { intake, updateIntake } = useIntake();
   const { errors, isValid } = useValidation();
   const [showErrors, setShowErrors] = React.useState(false);
@@ -162,8 +160,6 @@ export function SalesIntakePage({ onConvertToCampaign, onOpenBrandPreview, onBac
   }, [intake.finalBudget, intake.discountPercent, intake.currency]);
 
   const canSendForApproval = isValid && intake.status === "draft";
-  const canConvert =
-    (intake.status === "approved" || intake.status === "ready_for_ops") && isValid;
 
   const addLogEntry = useCallback(
     (action: string, actor: string = "sales.user@noon.com", detail?: string) => {
@@ -207,16 +203,6 @@ export function SalesIntakePage({ onConvertToCampaign, onOpenBrandPreview, onBac
   const handleMarkReady = () => {
     updateIntake({ status: "ready_for_ops" });
     addLogEntry("Marked ready for ops", "sales.user@noon.com");
-  };
-
-  const handleConvert = () => {
-    if (!isValid) {
-      setShowErrors(true);
-      return;
-    }
-    updateIntake({ status: "converted" });
-    addLogEntry("Converted to managed campaign", "ops.user@noon.com");
-    onConvertToCampaign();
   };
 
   const [copiedLink, setCopiedLink] = React.useState(false);
@@ -851,39 +837,6 @@ export function SalesIntakePage({ onConvertToCampaign, onOpenBrandPreview, onBac
               )}
             </CardContent>
           </Card>
-
-          {/* Ops Action */}
-          {(intake.status === "approved" || intake.status === "ready_for_ops") && (
-            <Card className="border-primary-300 ring-2 ring-primary-100">
-              <CardContent className="space-y-3">
-                <div className="flex items-center gap-2 mb-1">
-                  <Palette className="w-4 h-4 text-primary-500" />
-                  <span className="text-xs font-semibold text-primary-600 uppercase tracking-wider">
-                    Ops Action
-                  </span>
-                </div>
-                <p className="text-sm text-gray-600">
-                  This booking is approved. Convert it to a Managed Campaign to configure slots,
-                  targeting, and creatives.
-                </p>
-                {!isValid && (
-                  <Alert variant="warning">
-                    Intake has validation issues that must be resolved before conversion.
-                  </Alert>
-                )}
-                {intake.currency === "AED" && (
-                  <Alert variant="warning">
-                    Budget is in AED. Managed campaigns use USD. The budget will be prefilled as-is
-                    — ops to convert to USD manually if needed.
-                  </Alert>
-                )}
-                <Button className="w-full" size="lg" disabled={!canConvert} onClick={handleConvert}>
-                  <ArrowRight className="w-4 h-4 mr-2" />
-                  Convert to Campaign
-                </Button>
-              </CardContent>
-            </Card>
-          )}
 
           {/* Activity Log */}
           <Card>

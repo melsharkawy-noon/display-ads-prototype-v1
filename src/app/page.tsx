@@ -7,8 +7,6 @@ import { SalesRequestsPage } from "@/components/SalesRequestsPage";
 import { SalesIntakePage } from "@/components/SalesIntakePage";
 import { BrandPreviewPage } from "@/components/BrandPreviewPage";
 import { useIntake } from "@/context/IntakeContext";
-import { useCampaign } from "@/context/CampaignContext";
-import { AED_TO_USD_RATE } from "@/lib/types";
 import { PlusCircle, Calendar, LayoutGrid, ClipboardList } from "lucide-react";
 
 type Tab = "builder" | "calendar" | "requests";
@@ -17,8 +15,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<Tab>("builder");
   const [showIntakeDetail, setShowIntakeDetail] = useState(false);
   const [brandPreviewOpen, setBrandPreviewOpen] = useState(false);
-  const { intake, selectBooking, createBooking } = useIntake();
-  const { updateDraft, resetDraft } = useCampaign();
+  const { selectBooking, createBooking } = useIntake();
 
   const handleOpenBooking = useCallback(
     (id: string) => {
@@ -37,34 +34,6 @@ export default function Home() {
     selectBooking(null);
     setShowIntakeDetail(false);
   }, [selectBooking]);
-
-  const handleConvertToCampaign = useCallback(() => {
-    resetDraft();
-
-    const countryMap: Record<string, string> = { AE: "AE", SA: "SA", EG: "EG" };
-    const country = countryMap[intake.campaignCountry] || "AE";
-
-    const netBudget = intake.finalBudget * (1 - intake.discountPercent / 100);
-    let budgetUsd = netBudget;
-    if (intake.currency === "AED") {
-      budgetUsd = netBudget * AED_TO_USD_RATE;
-    }
-
-    updateDraft({
-      entryType: "brand",
-      ownerType: "ops_managed",
-      campaignType: intake.advertiserType === "3P" ? "third_party" : "internal",
-      pricingModel: "cpm",
-      country,
-      campaignName: intake.bookingName,
-      budget: Math.round(budgetUsd),
-      budgetType: "total",
-      totalBudget: Math.round(budgetUsd),
-    });
-
-    setShowIntakeDetail(false);
-    setActiveTab("builder");
-  }, [intake, resetDraft, updateDraft]);
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: "builder", label: "Campaign Builder", icon: <PlusCircle className="w-4 h-4" /> },
@@ -120,7 +89,6 @@ export default function Home() {
       )}
       {activeTab === "requests" && showIntakeDetail && (
         <SalesIntakePage
-          onConvertToCampaign={handleConvertToCampaign}
           onOpenBrandPreview={() => setBrandPreviewOpen(true)}
           onBackToList={handleBackToList}
         />

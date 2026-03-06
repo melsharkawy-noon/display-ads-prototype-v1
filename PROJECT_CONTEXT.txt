@@ -1,7 +1,7 @@
 ================================================================================
 DISPLAY ADS PROTOTYPE — FULL PROJECT CONTEXT
 ================================================================================
-Last Updated: February 9, 2026 (added Sales Requests list page)
+Last Updated: March 6, 2026 (Booking-Builder integration update)
 Purpose: Knowledge transfer document for future LLMs, agents, or developers.
          Contains everything needed to understand, maintain, and extend this app.
 
@@ -1198,188 +1198,300 @@ Based on all interactions with the project owner:
   - They want the prototype to feel real (realistic mock data, actual Unsplash images)
 
 ================================================================================
-29. SALES INTAKE PAGE (SalesIntakePage.tsx)
+29. BOOKINGS (formerly "Sales Intake")
 ================================================================================
-(Added February 2026)
+(Rewritten March 6, 2026 — major model change)
 
-A separate top-level page (tab in the nav) that replaces a Google Form process.
-It creates a "Booking Intake" object — NOT a campaign — for the Sales → Brand
-Approval → Ops handoff flow.
+CONCEPTUAL SHIFT:
+  The old "Sales Intake" flow treated each intake as a single request that was
+  "converted" into one campaign. The new model treats a Booking as a parent
+  commercial/planning object that can result in MULTIPLE campaigns underneath it.
+  This reflects the real-world reality where a single brand deal (e.g., Samsung
+  Galaxy S25 Launch — $250K) spawns several campaigns across different pages,
+  formats, and date ranges.
+
+  Key changes from the old model:
+  - "Sales Intake" renamed to "Bookings" throughout
+  - "Convert to Campaign" removed — replaced with "Add Campaign"
+  - BookingIntake.campaigns: BookingCampaign[] tracks child campaigns
+  - Media Brief file upload removed — replaced with inline Media Plan table
+  - AD_ASSET_TYPES / adAssetTypes fields removed from the model entirely
+  - New statuses: in_planning, partially_converted, fully_converted
+  - Old statuses removed: ready_for_ops, converted
 
 29a. Navigation
-  The top nav now has three tabs: Campaign Builder | Calendar Overview | Sales Requests
-  Active tab is stored in page.tsx as state: "builder" | "calendar" | "requests".
-  The "Sales Requests" tab shows the list by default; opening a booking shows the
-  detail page (SalesIntakePage) as a sub-view within the same tab.
-  See section 30 for the list page details.
+  Top nav: Campaign Builder | Calendar Overview | Bookings
+  Tab state: "builder" | "calendar" | "bookings" (page.tsx)
+  Sub-navigation within the "bookings" tab:
+    - List view (BookingsListPage): default when clicking the tab
+    - Detail view (BookingDetailPage): shown when opening/creating a booking
+  Managed via showBookingDetail boolean state in page.tsx.
 
-29b. Data Model
-  BookingIntake interface (types.ts) — separate from CampaignDraft:
-    id, bookingName, salesEmail, partnerLeCode, brandCode, advertiserType,
-    advertiserCountry, campaignCountry, brandBusiness, commercialCategory,
-    commercialPoc, finalBudget, discountPercent, currency (USD|AED),
-    delayedPayment, invoicingMethod, adAssetTypes (multi-select),
-    needsCreativeServices (bool), mediaBriefFileName, mediaBriefUploaded,
-    status (BookingStatus), approvalLink, brandEditableFields, approvedAt,
-    approvedBy, activityLog (ActivityLogEntry[]), createdAt.
+29b. Data Model (types.ts)
 
-  BookingStatus: "draft" | "pending_approval" | "approved" | "rejected" | "ready_for_ops"
+  BookingStatus (updated):
+    "draft" | "pending_approval" | "approved" | "rejected" |
+    "in_planning" | "partially_converted" | "fully_converted"
 
-  Constants in types.ts:
-    AD_ASSET_TYPES — 7 asset types (only "Display – On Deck" is operationalized)
+  ActorType (NEW):
+    "sales" | "ops" | "brand" | "system"
+    Used in ActivityLogEntry.actorType to distinguish who made each change.
+
+  ActivityLogEntry (updated):
+    id, timestamp, action, actor (email), actorType? (ActorType), detail?
+
+  MediaPlanRow:
+    id, channel (from MEDIA_PLAN_CHANNELS), adType (from MEDIA_PLAN_AD_TYPES),
+    sharePercent, shareValue, audienceNotes
+
+  BookingCampaign:
+    id, campaignName, status (BookingCampaignStatus: draft/active/paused/completed/archived),
+    budget, pricingModel ("cpm"|"cpt"), startDate, endDate,
+    impressions, clicks, ctr, spend, createdAt
+
+  BookingIntake (updated):
+    Core fields: id, bookingName, salesEmail, partnerLeCode, brandCode,
+      advertiserType, advertiserCountry, campaignCountry, brandBusiness,
+      commercialCategory, commercialPoc
+    Budget: finalBudget, discountPercent, currency, delayedPayment, invoicingMethod
+    needsCreativeServices (bool)
+    Media Plan: mediaPlan (MediaPlanRow[]), tentativeStartDate, tentativeEndDate,
+      planningNotes, audienceNotes
+    Child campaigns: campaigns (BookingCampaign[])
+    Status/approval: status, approvalLink, brandEditableFields, approvedAt,
+      approvedBy, activityLog
+    Timestamps: createdAt, lastUpdated
+
+  CampaignDraft (updated — types.ts):
+    New fields: linkedBookingId (string), linkedBookingName (string)
+    Set when a campaign is created from a Booking. Empty when independent.
+
+  deriveConversionStatus(booking) (NEW helper — types.ts):
+    Returns { status: BookingStatus, overallocated: boolean }
+    Logic:
+      - Pre-approval statuses (draft, pending_approval, rejected) pass through
+      - 0 campaigns → in_planning
+      - 1+ campaigns, totalAllocated < netBudget → partially_converted
+      - totalAllocated >= netBudget → fully_converted
+      - totalAllocated > netBudget → overallocated flag = true
+
+  REMOVED from old model: adAssetTypes, mediaBriefFileName, mediaBriefUploaded
+
+  Constants (types.ts):
+    MEDIA_PLAN_CHANNELS — 8 channel options (On Deck, Social/CRM, ATL/BTL, etc.)
+    MEDIA_PLAN_AD_TYPES — "Managed Display Ads" | "Self Serve Ads"
     COMMERCIAL_CATEGORIES — 14 categories
     DELAYED_PAYMENT_OPTIONS — None, Net 30/45/60/90
     FIXED_CPM_ASSUMPTION — $5 (for forecast)
     AED_TO_USD_RATE — 0.2723 (mocked FX)
-    HIGH_BUDGET_THRESHOLD — $500K (triggers manual review warning)
-    MIN_BUDGET_USD — $100 (same as campaign builder minimum)
+    HIGH_BUDGET_THRESHOLD — $500K (triggers manual review)
+    MIN_BUDGET_USD — $100
 
-29c. State Management
-  IntakeContext (context/IntakeContext.tsx):
-    intake: BookingIntake, updateIntake(partial), resetIntake()
-    convertedIntakeId: string | null (tracks which intake was converted)
-  Wrapped in IntakeProvider in layout.tsx, alongside CampaignProvider.
-
-29d. Page Layout (SalesIntakePage.tsx)
-  Two-column layout: 8/12 left (form cards) + 4/12 right (status/forecast/actions).
-
-  Left column (form sections):
-    Section 1 — Booking Overview: name, LE code, brand, advertiser type, countries, etc.
-      Commercial POC only shown when advertiserType === "1P".
-    Section 2 — Budget & Commercial Terms: budget, discount%, currency toggle, payment terms.
-      Live "Budget Summary" box: gross, discount%, net (with AED→USD conversion note).
-    Section 3 — Campaign Meta: multi-select ad asset types, creative services toggle.
-      "Display – On Deck" has an "Operationalized" badge.
-    Section 4 — Media Brief Upload: mock file upload with replace/remove.
-
-  Right column (sticky sidebar):
-    Status badge card (with approved timestamp if applicable).
-    Forecast Preview: estimated impressions = netBudget / $5 CPM * 1000.
-      - "Looks feasible" when net budget ≥ $100 and ≤ $500K
-      - "Manual review recommended" when > $500K
-      - "Budget below minimum — forecast unavailable" when net < $100
-    Brand Approval panel:
-      Draft: brand-editable fields checkboxes + "Send for Approval" button.
-      Pending: approval link (copy to clipboard) + "Preview as Brand" button
-        + simulate Approve/Reject buttons.
-      Approved: "Mark Ready for Ops" button.
-    Ops Action panel (shown when approved/ready): "Convert to Campaign" CTA.
-      Both "Send for Approval" and "Convert to Campaign" are gated by validation.
-    Activity Log: timeline of all status transitions.
-
-29d-ii. Validation (aligned with campaign builder)
-  useValidation() hook inside SalesIntakePage:
-    Required fields: bookingName, partnerLeCode, brandCode, advertiserType,
-      advertiserCountry, campaignCountry, finalBudget, adAssetTypes (≥1).
-    commercialPoc required when advertiserType === "1P".
-    Net budget (after discount, converted to USD if AED) must be ≥ $100
-      (MIN_BUDGET_USD, same as campaign builder's budget >= 100 gate).
-  Inline errors shown on each field when showErrors=true (triggered by
-    attempting Send for Approval or Convert to Campaign when invalid).
-  ValidationSummary alert lists all issues at page top.
-  Budget Summary box turns red/amber when net budget is below minimum.
-
-29d-iii. Brand Preview (BrandPreviewPage.tsx)
-  Full-screen overlay (z-60) with a violet/purple "Brand Approval View" banner.
-  Opened via "Preview as Brand" button (appears after sending for approval).
-  Reads from the same IntakeContext — changes sync instantly.
-
-  Field display rules:
-    - Fields in intake.brandEditableFields → rendered as editable inputs
-    - All other fields → rendered as read-only with a Lock icon
-  Brand actions (when status === "pending_approval"):
-    - "Save Changes" — logs edit to activity log
-    - "Approve" — sets status to "approved", records timestamp + approver
-    - "Reject" — sets status to "rejected"
-  After action, status change is immediately reflected in the Sales Intake page
-    when the brand preview is closed (same React state tree).
-  Includes a field legend explaining the Lock vs editable distinction.
-  Shows budget summary and forecast (same calculations as sales view).
-
-29e. Convert to Campaign Flow
-  When "Convert to Campaign" is clicked (page.tsx handleConvertToCampaign):
-    1. Sets booking status to "converted"
-    2. Resets the campaign draft
-    3. Prefills: entryType="brand", ownerType="ops_managed",
-       campaignType based on advertiserType (3P→third_party, else→internal),
-       country, campaignName, budget (net, converted to USD if AED)
-    4. Switches to the "builder" tab
-  Does NOT prefill: targeting, slots, bid, creatives (ops sets these manually).
-  If currency is AED: shows a warning in the Ops Action panel about manual conversion.
-
-================================================================================
-30. SALES REQUESTS LIST PAGE (SalesRequestsPage.tsx)
-================================================================================
-(Added February 2026)
-
-A table/list view that acts as the primary entry point for the Sales Intake
-workflow. Shows all booking intake requests with status, budget, and actions.
-
-30a. Navigation
-  The top nav tab is "Sales Requests" (replaces the old "Sales Intake" tab).
-  Sub-navigation within the tab:
-    - List view (SalesRequestsPage): default when clicking the tab
-    - Detail view (SalesIntakePage): shown when opening/creating a booking
-  Managed via showIntakeDetail boolean in page.tsx.
-
-30b. Multi-Booking State (IntakeContext refactored)
-  IntakeContext now stores:
-    bookings: BookingIntake[] — the full list (initialized with 6 mock bookings)
+29c. State Management (IntakeContext.tsx)
+  IntakeContext stores:
+    bookings: BookingIntake[] — initialized with 6 mock bookings
     activeBookingId: string | null — which booking is being viewed/edited
-    intake: BookingIntake — derived from activeBookingId (same API as before)
-    updateIntake(partial) — updates the active booking in the list
-    createBooking() — creates a new BookingIntake, adds to list, selects it
+    intake: BookingIntake — derived from activeBookingId
+    updateIntake(partial) — updates the active booking, auto-derives status
+    saveBooking(actorType, detail?) — NEW: logs an edit event to activityLog,
+      records whether actor was Sales or Ops, flags post-approval edits
+    createBooking() — creates new BookingIntake, adds to list, selects it
     selectBooking(id) — sets activeBookingId
     deleteBooking(id) — removes from list
-  All existing SalesIntakePage + BrandPreviewPage code works unchanged since
-  they still use intake/updateIntake from the same hook.
+    addCampaignToBooking(bookingId, campaign) — appends a BookingCampaign to
+      the booking's campaigns array and adds an activity log entry
 
-30c. BookingStatus Update
-  Added "converted" status: shown when a booking has been converted to a campaign.
-  BookingIntake now also has a lastUpdated: Date field (auto-set by updateIntake).
+  Auto-derived status:
+    recomputeStatus() runs on every updateIntake, addCampaignToBooking call.
+    Uses deriveConversionStatus() to automatically transition between
+    in_planning / partially_converted / fully_converted based on campaigns
+    and budget allocation. Pre-approval statuses (draft, pending, rejected)
+    remain manual.
 
-30d. Mock Seed Data
-  6 bookings seeded on first load (createMockBookings() in types.ts):
-    Samsung Galaxy S25 Launch — approved, $250K, UAE, 1P
-    Nike Summer Collection — pending_approval, $150K, KSA, 3P
-    L'Oréal Beauty Festival — ready_for_ops, $80K, UAE, 1P
-    Adidas Egypt Ramadan — draft, $45K, Egypt, 3P
-    Nestlé KSA Always-On — converted, $320K, KSA, 1P
-    Nivea Winter Skincare — rejected, 25K AED, UAE, marketplace
+29d. Booking Detail Page (BookingDetailPage.tsx)
+  Two-column layout: 8/12 left (form cards) + 4/12 right (status/actions).
 
-30e. Table Columns
-  Booking Name (with amber AlertCircle if draft + incomplete)
-  Brand (resolved from brandCode → brands mock data)
+  Save & Edit Tracking (NEW):
+    - Actor toggle (Sales / Ops) in header — determines who is editing
+    - Dirty tracking: isDirty state set on any handleFieldUpdate call
+    - "Save Changes" amber bar appears when isDirty is true
+    - On save: calls saveBooking(actorType), which logs an activity entry like
+      "Edited by Sales" or "Booking updated after approval by Ops"
+    - Post-save: green confirmation bar shows "Changes saved · Logged as X edit"
+    - Booking Code (intake.id) displayed as read-only in the overview card
+
+  Left column sections:
+    Section 1 — Booking Overview: booking code (read-only), sales email, name,
+      LE code, brand, advertiser type, countries, business, category, POC for 1P.
+    Section 2 — Budget & Commercial Terms: budget, discount%, currency toggle,
+      payment terms. Live "Budget Summary" box with gross/discount/net.
+      If campaigns exist, also shows: allocated budget, campaign count,
+      unallocated/overallocated with progress bar.
+      Overallocation: red styling when campaign budgets exceed net budget.
+    Section 3 — Media Plan (replaces old file upload):
+      - Tentative start/end dates (date inputs)
+      - Editable planning table with columns: Channel/Asset (dropdown from
+        MEDIA_PLAN_CHANNELS), Ad Type (dropdown), Share % (auto-calculates value),
+        Value (display only), Audience Notes (text). Add/remove rows.
+      - Footer row shows total % and total value (% turns red if >100, green at 100)
+      - Planning Notes textarea (placements, pages, date inclusions/exclusions)
+      - Audience Targeting Notes textarea (top spenders, Noon One, etc.)
+      - Creative services toggle
+    Section 4 — Campaigns Under This Booking:
+      - Shows all child BookingCampaign objects
+      - Rollup bar: allocated budget, total impressions, spend, remaining/over
+      - Each campaign card shows: name, status badge, pricing model, budget,
+        dates, impressions, clicks, CTR, delivery health bar (% of budget spent)
+      - "Add Campaign" button (only when canAddCampaign — see status logic)
+      - Empty state when no campaigns, with context-dependent message
+
+  Right column:
+    Status card: shows auto-derived status (no manual progression buttons).
+      Status is now determined by deriveConversionStatus() — see 29b.
+      Overallocation warning shown when campaign budgets > net budget.
+      Note "Status auto-derived from campaign allocation" for post-approval states.
+    Forecast Preview (same logic as before)
+    Brand Approval panel:
+      Draft: editable fields checkboxes + "Send for Approval"
+      Pending: approval link, preview button, simulate Approve/Reject
+    Ops Action card (shown when canAddCampaign):
+      "Add Campaign" CTA — does NOT set full budget or name; light prefill only
+    Activity Log: now shows actorType badges (Sales=blue, Ops=purple, Brand=violet)
+
+  canAddCampaign = derived status is "approved" | "in_planning" | "partially_converted"
+
+29e. Add Campaign Flow (Booking → Campaign Builder linkage)
+  When "Add Campaign" is clicked (page.tsx handleAddCampaign):
+    1. Resets the campaign draft
+    2. Light prefill: entryType="brand", ownerType="ops_managed",
+       campaignType (based on advertiserType), pricingModel="cpm", country,
+       linkedBookingId=booking.id, linkedBookingName=booking.bookingName
+    3. Switches to "builder" tab for campaign configuration
+    4. The campaign is NOT added to the booking yet — that happens on submit
+  Does NOT prefill: budget, campaign name, targeting, slots, creatives.
+  Reason: booking budget may be split across many campaigns with different names.
+
+  Campaign Builder in Booking-Linked Mode (SinglePageFlow.tsx):
+    - When draft.linkedBookingId is set, isBookingLinked = true
+    - A "Linked Booking" info box appears in the CPM Campaign Details section
+      showing Booking Code and Booking Name as read-only fields
+    - The review card also shows a Booking banner with code + name
+    - On Submit: SinglePageFlow calls onCampaignSubmit callback
+    - page.tsx handleCampaignSubmit creates a BookingCampaign from the draft
+      (name, budget, pricingModel, dates) and calls addCampaignToBooking()
+    - This auto-triggers status recomputation on the booking
+
+29f. Derived Booking Conversion Status
+  Booking status is now auto-derived for post-approval states:
+    - Pre-approval (draft, pending_approval, rejected): manual, unchanged
+    - 0 campaigns → in_planning ("Planning")
+    - 1+ campaigns, totalAllocated < netBudget → partially_converted
+    - totalAllocated >= netBudget → fully_converted
+    - totalAllocated > netBudget → overallocated warning flag
+  The deriveConversionStatus() function is called on every state update.
+  Displayed on both list page and detail page.
+  Manual "Move to Planning" / "Mark Partially Converted" buttons removed.
+
+29g. Validation (same logic as before)
+  useValidation() in BookingDetailPage:
+    Required: bookingName, partnerLeCode, brandCode, advertiserType,
+      advertiserCountry, campaignCountry, finalBudget (>$100 net USD).
+    commercialPoc required when advertiserType === "1P".
+  Gating: "Send for Approval" requires isValid + status=draft.
+  Budget Summary turns red/amber when below minimum.
+
+29h. Brand Preview (BrandPreviewPage.tsx)
+  Full-screen overlay (z-60), violet "Brand Approval View" banner.
+  Same editable/locked field logic as before.
+  Now shows Media Plan as read-only (dates, planning table, notes).
+  No longer shows ad asset types or media brief upload.
+  Actions: Save Changes, Approve, Reject (when pending).
+
+================================================================================
+30. BOOKINGS LIST PAGE (BookingsListPage.tsx)
+================================================================================
+(Rewritten March 6, 2026 — expandable rows, actions menu, child campaigns)
+
+The primary entry point to the Bookings workflow. Shows all bookings in a table
+with search, filters, and expandable rows revealing child campaigns.
+
+30a. Navigation
+  Top nav tab: "Bookings" (icon: BookOpen)
+  Sub-navigation managed by showBookingDetail in page.tsx.
+  List view is the default; clicking a booking or "New Booking" shows detail.
+
+30b. Table Columns
+  [Expand toggle] — disabled when booking has no campaigns
+  Booking (name + ID, with amber AlertCircle if draft + incomplete)
+  Brand (resolved from brandCode)
   LE Code (hidden on small screens)
   Advertiser Type (1P / 3P / Marketplace)
   Campaign Country
   Net Budget (computed: finalBudget * (1 - discountPercent/100))
-  Status (colored badge with dot)
-  Created By (email, hidden on small screens)
+  Campaigns (count badge with Layers icon, or "—" if none)
+  Status (colored badge with dot; new statuses: In Planning, Partially/Fully Converted)
   Last Updated (date + time)
-  Actions (Edit for drafts, View for others)
+  Actions (3-dot menu)
 
-30f. Search + Filters
+30c. Actions Menu (per row)
+  Opened via MoreHorizontal icon. Contains:
+    - View Booking → opens detail
+    - Edit Booking → opens detail
+    - Add Campaign → only shown when derived status is approved/in_planning/
+      partially_converted; calls onAddCampaign(bookingId) which prefills the
+      campaign draft with booking context and switches to the builder tab
+
+30d. Expandable Rows — Child Campaigns
+  Clicking the expand chevron toggles visibility of campaigns under a booking.
+  Status display uses deriveConversionStatus() — auto-derived from campaigns/budget.
+  Expanded area shows:
+    - Booking-level rollup bar: campaign count, allocated budget, total impressions,
+      total spend, remaining/over-allocated budget (with red styling if overallocated)
+    - Each child campaign as a compact row/card with:
+      name, status badge, pricing model, budget, date range, impressions, clicks,
+      CTR, delivery health indicator (progress bar with color: green/amber/red)
+    - View/Edit campaign action buttons
+    - "Add Campaign to this Booking" link (when derived status allows)
+
+30e. Search + Filters
   Free-text search: matches bookingName, brandCode, brand name, LE code, email
-  Status filter: dropdown (single select)
+  Status filter: dropdown (single select, all 7 statuses)
   Country filter: dropdown
   Advertiser Type filter: dropdown
   Sort: lastUpdated (default desc), netBudget, status — toggleable asc/desc
 
-30g. Empty States
+30f. Empty States
   No bookings at all: centered card with CTA "Create your first booking"
-  Filters yield no results: "No matching requests" with "Clear all filters"
+  Filters yield no results: "No matching bookings" with "Clear all filters"
 
-30h. Row Click
-  Clicking a table row calls selectBooking(id) and shows the SalesIntakePage.
-  SalesIntakePage now has a "Back to Sales Requests" link at the top.
+30g. Mock Seed Data (6 bookings with campaigns)
+  Samsung Galaxy S25 Launch — partially_converted, $250K, UAE, 1P
+    2 campaigns: Homepage Hero (active, $80K), Electronics CLP (active, $55K)
+  Nike Summer Collection — pending_approval, $150K, KSA, 3P, no campaigns
+  L'Oréal Beauty Festival — in_planning, $80K, UAE, 1P, no campaigns yet
+  Adidas Egypt Ramadan — draft, $45K, Egypt, 3P, no campaigns
+  Nestlé KSA Always-On — fully_converted, $320K, KSA, 1P
+    3 campaigns: Ramadan Homepage (completed), Grocery CLP (active), Sponsored (active)
+  Nivea Winter Skincare — rejected, 25K AED, UAE, marketplace, no campaigns
 
-30i. Files Added/Modified
-  NEW: src/components/SalesRequestsPage.tsx (~280 lines)
-  MODIFIED: src/context/IntakeContext.tsx (multi-booking: bookings[], select, create, delete)
-  MODIFIED: src/lib/types.ts (added "converted" status, lastUpdated field, createMockBookings())
-  MODIFIED: src/components/SalesIntakePage.tsx (back nav, "converted" status config, status set)
-  MODIFIED: src/app/page.tsx (replaced "intake" tab with "requests", list↔detail sub-nav)
+30h. Files (current state)
+  src/components/BookingsListPage.tsx — table with expandable rows, derived status (~480 lines)
+  src/components/BookingDetailPage.tsx — detail/edit page with save tracking, media plan,
+    campaigns, actor toggle, derived status, overallocation warnings (~470 lines)
+  src/components/BrandPreviewPage.tsx — brand approval overlay (~260 lines)
+  src/components/SinglePageFlow.tsx — campaign builder; now accepts onCampaignSubmit
+    callback and shows Booking Code/Name when isBookingLinked (~1875 lines)
+  src/context/IntakeContext.tsx — multi-booking state, saveBooking with actor type,
+    auto-derived status via recomputeStatus
+  src/context/CampaignContext.tsx — CampaignDraft with linkedBookingId/Name
+  src/lib/types.ts — BookingIntake, BookingCampaign, MediaPlanRow, ActorType,
+    deriveConversionStatus(), CampaignDraft.linkedBookingId/Name
+  src/app/page.tsx — tab routing, handleAddCampaign (with booking lookup),
+    handleCampaignSubmit (creates BookingCampaign on builder submit)
+
+  DELETED (replaced):
+  src/components/SalesRequestsPage.tsx → replaced by BookingsListPage.tsx
+  src/components/SalesIntakePage.tsx → replaced by BookingDetailPage.tsx
 
 ================================================================================
 END OF DOCUMENT

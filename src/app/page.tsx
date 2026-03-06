@@ -3,78 +3,104 @@
 import { useState, useCallback } from "react";
 import { SinglePageFlow } from "@/components/SinglePageFlow";
 import { CalendarOverview } from "@/components/CalendarOverview";
-import { SalesRequestsPage } from "@/components/SalesRequestsPage";
-import { SalesIntakePage } from "@/components/SalesIntakePage";
+import { BookingsListPage } from "@/components/BookingsListPage";
+import { BookingDetailPage } from "@/components/BookingDetailPage";
 import { BrandPreviewPage } from "@/components/BrandPreviewPage";
 import { useIntake } from "@/context/IntakeContext";
 import { useCampaign } from "@/context/CampaignContext";
-import { AED_TO_USD_RATE } from "@/lib/types";
-import { PlusCircle, Calendar, LayoutGrid, ClipboardList } from "lucide-react";
+import { BookingCampaign } from "@/lib/types";
+import { PlusCircle, Calendar, LayoutGrid, BookOpen } from "lucide-react";
 
-type Tab = "builder" | "calendar" | "requests";
+type Tab = "builder" | "calendar" | "bookings";
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<Tab>("builder");
-  const [showIntakeDetail, setShowIntakeDetail] = useState(false);
+  const [showBookingDetail, setShowBookingDetail] = useState(false);
   const [brandPreviewOpen, setBrandPreviewOpen] = useState(false);
-  const { intake, selectBooking, createBooking } = useIntake();
-  const { updateDraft, resetDraft } = useCampaign();
+  const [autoExpandBookingId, setAutoExpandBookingId] = useState<string | null>(null);
+  const [highlightCampaignId, setHighlightCampaignId] = useState<string | null>(null);
+  const { intake, bookings, selectBooking, createBooking, addCampaignToBooking } = useIntake();
+  const { draft, updateDraft, resetDraft } = useCampaign();
 
   const handleOpenBooking = useCallback(
     (id: string) => {
       selectBooking(id);
-      setShowIntakeDetail(true);
+      setShowBookingDetail(true);
     },
     [selectBooking]
   );
 
   const handleNewBooking = useCallback(() => {
     createBooking();
-    setShowIntakeDetail(true);
+    setShowBookingDetail(true);
   }, [createBooking]);
 
   const handleBackToList = useCallback(() => {
     selectBooking(null);
-    setShowIntakeDetail(false);
+    setShowBookingDetail(false);
   }, [selectBooking]);
 
-  const handleConvertToCampaign = useCallback(() => {
+  const handleAddCampaign = useCallback((bookingId?: string) => {
+    const target = bookingId
+      ? bookings.find((b) => b.id === bookingId) ?? intake
+      : intake;
+    if (!target.id) return;
+
     resetDraft();
 
     const countryMap: Record<string, string> = { AE: "AE", SA: "SA", EG: "EG" };
-    const country = countryMap[intake.campaignCountry] || "AE";
-
-    const netBudget = intake.finalBudget * (1 - intake.discountPercent / 100);
-    let budgetUsd = netBudget;
-    if (intake.currency === "AED") {
-      budgetUsd = netBudget * AED_TO_USD_RATE;
-    }
+    const country = countryMap[target.campaignCountry] || "AE";
 
     updateDraft({
       entryType: "brand",
       ownerType: "ops_managed",
-      campaignType: intake.advertiserType === "3P" ? "third_party" : "internal",
+      campaignType: target.advertiserType === "3P" ? "third_party" : "internal",
       pricingModel: "cpm",
       country,
-      campaignName: intake.bookingName,
-      budget: Math.round(budgetUsd),
-      budgetType: "total",
-      totalBudget: Math.round(budgetUsd),
+      linkedBookingId: target.id,
+      linkedBookingName: target.bookingName,
     });
 
-    setShowIntakeDetail(false);
     setActiveTab("builder");
-  }, [intake, resetDraft, updateDraft]);
+  }, [intake, bookings, resetDraft, updateDraft]);
+
+  const handleCampaignSubmit = useCallback(() => {
+    if (!draft.linkedBookingId) return;
+
+    const campaignId = `C-${Date.now().toString(36).toUpperCase()}`;
+    const bookingId = draft.linkedBookingId;
+
+    const newCampaign: BookingCampaign = {
+      id: campaignId,
+      campaignName: draft.campaignName || `Campaign — ${draft.linkedBookingName}`,
+      status: "draft",
+      budget: draft.budgetType === "daily" ? draft.dailyBudget : draft.totalBudget,
+      pricingModel: draft.pricingModel === "cpt" ? "cpt" : "cpm",
+      startDate: draft.startDate,
+      endDate: draft.endDate,
+      impressions: 0,
+      clicks: 0,
+      ctr: 0,
+      spend: 0,
+      createdAt: new Date(),
+    };
+
+    addCampaignToBooking(bookingId, newCampaign);
+
+    setAutoExpandBookingId(bookingId);
+    setHighlightCampaignId(campaignId);
+    setShowBookingDetail(false);
+    setActiveTab("bookings");
+  }, [draft, addCampaignToBooking]);
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: "builder", label: "Campaign Builder", icon: <PlusCircle className="w-4 h-4" /> },
     { id: "calendar", label: "Calendar Overview", icon: <Calendar className="w-4 h-4" /> },
-    { id: "requests", label: "Sales Requests", icon: <ClipboardList className="w-4 h-4" /> },
+    { id: "bookings", label: "Bookings", icon: <BookOpen className="w-4 h-4" /> },
   ];
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Top Navigation Bar */}
       <nav className="bg-white border-b shadow-sm sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex items-center justify-between h-14">
@@ -91,8 +117,8 @@ export default function Home() {
                   key={tab.id}
                   onClick={() => {
                     setActiveTab(tab.id);
-                    if (tab.id !== "requests") {
-                      setShowIntakeDetail(false);
+                    if (tab.id !== "bookings") {
+                      setShowBookingDetail(false);
                     }
                   }}
                   className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
@@ -112,21 +138,31 @@ export default function Home() {
         </div>
       </nav>
 
-      {/* Content */}
-      {activeTab === "builder" && <SinglePageFlow />}
+      {activeTab === "builder" && <SinglePageFlow onCampaignSubmit={handleCampaignSubmit} />}
       {activeTab === "calendar" && <CalendarOverview />}
-      {activeTab === "requests" && !showIntakeDetail && (
-        <SalesRequestsPage onOpenBooking={handleOpenBooking} onNewBooking={handleNewBooking} />
+      {activeTab === "bookings" && !showBookingDetail && (
+        <BookingsListPage
+          onOpenBooking={handleOpenBooking}
+          onNewBooking={handleNewBooking}
+          onAddCampaign={(bookingId) => {
+            handleAddCampaign(bookingId);
+          }}
+          autoExpandBookingId={autoExpandBookingId}
+          highlightCampaignId={highlightCampaignId}
+          onClearHighlight={() => {
+            setAutoExpandBookingId(null);
+            setHighlightCampaignId(null);
+          }}
+        />
       )}
-      {activeTab === "requests" && showIntakeDetail && (
-        <SalesIntakePage
-          onConvertToCampaign={handleConvertToCampaign}
+      {activeTab === "bookings" && showBookingDetail && (
+        <BookingDetailPage
+          onAddCampaign={() => handleAddCampaign()}
           onOpenBrandPreview={() => setBrandPreviewOpen(true)}
           onBackToList={handleBackToList}
         />
       )}
 
-      {/* Brand Preview Overlay */}
       {brandPreviewOpen && <BrandPreviewPage onClose={() => setBrandPreviewOpen(false)} />}
     </div>
   );

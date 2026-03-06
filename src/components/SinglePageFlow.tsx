@@ -118,8 +118,13 @@ const BOOKING_HOURS = Array.from({ length: 24 }, (_, i) => {
   };
 });
 
-export function SinglePageFlow() {
+interface SinglePageFlowProps {
+  onCampaignSubmit?: () => void;
+}
+
+export function SinglePageFlow({ onCampaignSubmit }: SinglePageFlowProps) {
   const { draft, updateDraft } = useCampaign();
+  const isBookingLinked = !!draft.linkedBookingId;
   const [activeSection, setActiveSection] = useState("entry");
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
@@ -492,7 +497,7 @@ export function SinglePageFlow() {
             </div>
             <div className="flex items-center gap-4">
               <Button variant="outline" size="sm">Save Draft</Button>
-              <Button size="sm" disabled={draft.entryType === "seller" ? visibleSections.length < 6 : visibleSections.length < 8}>Submit Campaign</Button>
+              <Button size="sm" disabled={draft.entryType === "seller" ? visibleSections.length < 6 : visibleSections.length < 8} onClick={() => onCampaignSubmit?.()}>Submit Campaign</Button>
             </div>
           </div>
         </div>
@@ -960,7 +965,7 @@ export function SinglePageFlow() {
                     {/* Action buttons */}
                     <div className="flex items-center justify-end gap-3 pt-3 border-t border-amber-200">
                       <Button variant="outline">Save Draft</Button>
-                      <Button>Submit Campaign</Button>
+                      <Button onClick={() => onCampaignSubmit?.()}>Submit Campaign</Button>
                     </div>
                   </CardContent>
                 </Card>
@@ -1170,6 +1175,22 @@ export function SinglePageFlow() {
                   <CardContent className="p-6">
                     <h2 className="text-lg font-semibold text-gray-900 mb-1">Campaign Details</h2>
                     <p className="text-sm text-gray-500 mb-6">Set your campaign name, schedule, and budget</p>
+
+                    {isBookingLinked && (
+                      <div className="mb-6 p-4 bg-primary-50/50 border border-primary-200 rounded-lg">
+                        <p className="text-xs font-semibold text-primary-600 uppercase tracking-wider mb-3">Linked Booking</p>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">Booking Code</label>
+                            <div className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm font-mono text-gray-700">{draft.linkedBookingId}</div>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">Booking Name</label>
+                            <div className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 truncate">{draft.linkedBookingName}</div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     
                     {/* Campaign Name */}
                     <div className="mb-6">
@@ -1624,6 +1645,14 @@ export function SinglePageFlow() {
             {draft.entryType !== "seller" && visibleSections.includes("creatives") && (
               <Card className="bg-gradient-to-r from-primary-50 to-white border-primary-200">
                 <CardContent className="p-6">
+                  {isBookingLinked && (
+                    <div className="flex items-center gap-4 mb-4 px-3 py-2 bg-white/80 border border-primary-200 rounded-lg text-sm">
+                      <span className="text-xs font-semibold text-primary-600 uppercase tracking-wider">Booking</span>
+                      <span className="font-mono text-gray-700">{draft.linkedBookingId}</span>
+                      <span className="text-gray-400">&middot;</span>
+                      <span className="text-gray-700 truncate">{draft.linkedBookingName}</span>
+                    </div>
+                  )}
                   {draft.pricingModel === "cpt" ? (
                     /* CPT Submit Review */
                     <div>
@@ -1705,7 +1734,7 @@ export function SinglePageFlow() {
                               <Button variant="outline" onClick={() => setSlotsReserved(true)}>
                                 Reserve Slots
                               </Button>
-                              <Button>Submit Campaign</Button>
+                              <Button onClick={() => onCampaignSubmit?.()}>Submit Campaign</Button>
                             </>
                           ) : (
                             <>
@@ -1836,7 +1865,7 @@ export function SinglePageFlow() {
                           {/* Action buttons */}
                           <div className="flex items-center justify-end gap-3 pt-3 border-t border-primary-100">
                             <Button variant="outline">Save Draft</Button>
-                            <Button>Submit Campaign</Button>
+                            <Button onClick={() => onCampaignSubmit?.()}>Submit Campaign</Button>
                           </div>
                         </div>
                       );

@@ -1,21 +1,19 @@
 "use client";
 
-import { memo, useMemo } from "react";
+import { memo, useMemo, useState, useEffect } from "react";
 import { useCampaign } from "@/context/CampaignContext";
 import { Card, CardContent } from "@/components/ui/Card";
-import { cn, formatNumber, formatCurrency } from "@/lib/utils";
+import { cn, formatNumber } from "@/lib/utils";
 import {
-  Target,
-  BarChart3,
   TrendingUp,
-  DollarSign,
-  AlertCircle,
   CheckCircle,
+  AlertTriangle,
   Info,
-  Layers,
   Users,
+  BarChart3,
+  Eye,
+  DollarSign,
 } from "lucide-react";
-import { countries } from "@/lib/mock-data";
 
 interface BiddingSectionProps {
   sectionRef: (el: HTMLElement | null) => void;
@@ -25,6 +23,37 @@ interface BiddingSectionProps {
   estimatedReach: number;
 }
 
+const BASE_DAILY_INVENTORY = 15_000_000;
+
+function estimateAvailableViews(
+  audienceCount: number,
+  hasCompound: boolean,
+  slotMode: "all" | "include" | "exclude",
+  slotCount: number
+): number {
+  let available = BASE_DAILY_INVENTORY;
+  if (audienceCount > 0) {
+    const audienceMultiplier = Math.max(0.02, 1 - audienceCount * 0.18);
+    available *= audienceMultiplier;
+  }
+  if (hasCompound) available *= 0.6;
+  if (slotMode === "include" && slotCount > 0) {
+    available *= Math.min(1, slotCount * 0.12);
+  } else if (slotMode === "exclude" && slotCount > 0) {
+    available *= Math.max(0.3, 1 - slotCount * 0.04);
+  }
+  return Math.round(available);
+}
+
+function getRecommendedBid(audienceCount: number, hasCompound: boolean): number {
+  let base = 3.5;
+  if (audienceCount >= 4) base = 6.5;
+  else if (audienceCount >= 2) base = 5.0;
+  else if (audienceCount >= 1) base = 4.0;
+  if (hasCompound) base += 1.0;
+  return Math.round(base * 100) / 100;
+}
+
 const BiddingSection = memo(function BiddingSection({
   sectionRef,
   slotMultiplier,
@@ -32,366 +61,271 @@ const BiddingSection = memo(function BiddingSection({
   slotTargetingMode,
   estimatedReach,
 }: BiddingSectionProps) {
-  const { draft } = useCampaign();
+  const { draft, updateDraft } = useCampaign();
 
   const isSeller = draft.entryType === "seller";
 
-  // --- Seller-specific currency logic ---
-  const selectedCountry = useMemo(
-    () => countries.find((c) => c.code === draft.country),
-    [draft.country]
-  );
-  const currency = isSeller ? selectedCountry?.currency || "AED" : "USD";
+  // Local input state kept in sync with draft
+  const [localBudget, setLocalBudget] = useState(draft.budget.toString());
+  const [localBid, setLocalBid] = useState(draft.bidAmount.toString());
 
-  // --- Bid metrics ---
-  const metrics = useMemo(() => {
-    const targetBids = draft.audienceSegments.map((s) => s.bid);
-    const avgBid =
-      targetBids.length > 0
-        ? targetBids.reduce((a, b) => a + b, 0) / targetBids.length
-        : 0;
-    const minBid = targetBids.length > 0 ? Math.min(...targetBids) : 0;
-    const maxBid = targetBids.length > 0 ? Math.max(...targetBids) : 0;
-    // For include mode, compute average of group multipliers; for exclude, use single multiplier
-    const slotMultiplierValue = (() => {
-      if (!isSeller && slotTargetingMode === "include" && Object.keys(slotGroupMultipliers).length > 0) {
-        const vals = Object.values(slotGroupMultipliers).map(v => parseFloat(v) || 0);
-        return vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
-      }
-      return parseFloat(slotMultiplier) || 0;
-    })();
-    const effectiveAvgBid = isSeller
-      ? avgBid
-      : avgBid * (1 + slotMultiplierValue / 100);
+  useEffect(() => { setLocalBudget(draft.budget.toString()); }, [draft.budget]);
+  useEffect(() => { setLocalBid(draft.bidAmount.toString()); }, [draft.bidAmount]);
 
-    // Thresholds differ per flow
-    let lowThreshold: number;
-    let highThreshold: number;
-    if (isSeller) {
-      lowThreshold = currency === "EGP" ? 90 : 11;
-      highThreshold = currency === "EGP" ? 180 : 22;
-    } else {
-      lowThreshold = 3;
-      highThreshold = 6;
+  const audienceCount = draft.audienceSegments.length;
+  const hasCompound = draft.audienceSegments.some((s) => s.conditions && s.conditions.length > 1);
+  const slotCount = slotTargetingMode === "include" ? draft.slotIds.length : draft.excludedSlotIds.length;
+
+  const forecast = useMemo(() => {
+    const bid = parseFloat(localBid) || draft.bidAmount || 5;
+    const budget = parseFloat(localBudget) || draft.budget || 0;
+    const expectedViews = bid > 0 ? Math.round((budget / bid) * 1000) : 0;
+    const availableViews = estimateAvailableViews(audienceCount, hasCompound, slotTargetingMode, slotCount);
+    const recommended = getRecommendedBid(audienceCount, hasCompound);
+
+    let feasibility: "comfortable" | "tight" | "insufficient";
+    if (availableViews >= expectedViews * 1.3) feasibility = "comfortable";
+    else if (availableViews >= expectedViews * 0.9) feasibility = "tight";
+    else feasibility = "insufficient";
+
+    const bidAlignment = bid >= recommended * 0.85 ? "aligned" : "below";
+
+    const targetingLevel =
+      audienceCount === 0
+        ? "Broad"
+        : audienceCount <= 2
+        ? "Moderate"
+        : audienceCount <= 4
+        ? "Narrow"
+        : "Very Niche";
+
+    return { bid, budget, expectedViews, availableViews, recommended, feasibility, bidAlignment, targetingLevel };
+  }, [localBid, localBudget, draft.bidAmount, draft.budget, audienceCount, hasCompound, slotTargetingMode, slotCount]);
+
+  const commitBudget = () => {
+    const num = parseFloat(localBudget);
+    if (!isNaN(num) && num >= 100) {
+      updateDraft({
+        budget: num,
+        dailyBudget: draft.budgetType === "daily" ? num : draft.dailyBudget,
+        totalBudget: draft.budgetType === "total" ? num : draft.totalBudget,
+      });
+    } else if (!isNaN(num) && num > 0 && num < 100) {
+      setLocalBudget("100");
+      updateDraft({
+        budget: 100,
+        dailyBudget: draft.budgetType === "daily" ? 100 : draft.dailyBudget,
+        totalBudget: draft.budgetType === "total" ? 100 : draft.totalBudget,
+      });
     }
+  };
 
-    const competitivenessLevel =
-      effectiveAvgBid < lowThreshold
-        ? "low"
-        : effectiveAvgBid < highThreshold
-        ? "medium"
-        : "high";
-    const winRate =
-      effectiveAvgBid < lowThreshold
-        ? 30
-        : effectiveAvgBid < highThreshold
-        ? 60
-        : 85;
-    const estimatedViews = Math.round(
-      Math.min(estimatedReach, (draft.budget / (effectiveAvgBid || 1)) * 1000) *
-        (winRate / 100)
-    );
-    const budgetUtilization =
-      effectiveAvgBid > 0
-        ? Math.min(
-            100,
-            Math.round(
-              ((estimatedViews * effectiveAvgBid) / 1000 / draft.budget) * 100
-            )
-          )
-        : 0;
+  const commitBid = () => {
+    const num = parseFloat(localBid);
+    if (!isNaN(num) && num > 0) updateDraft({ bidAmount: num });
+    else setLocalBid(draft.bidAmount.toString());
+  };
 
-    return {
-      targetBids,
-      avgBid,
-      minBid,
-      maxBid,
-      slotMultiplierValue,
-      effectiveAvgBid,
-      competitivenessLevel,
-      winRate,
-      estimatedViews,
-      budgetUtilization,
-    };
-  }, [
-    draft.audienceSegments,
-    draft.budget,
-    slotMultiplier,
-    slotGroupMultipliers,
-    slotTargetingMode,
-    estimatedReach,
-    isSeller,
-    currency,
-  ]);
-
-  const {
-    avgBid,
-    minBid,
-    maxBid,
-    slotMultiplierValue,
-    effectiveAvgBid,
-    competitivenessLevel,
-    winRate,
-    estimatedViews,
-    budgetUtilization,
-  } = metrics;
-
-  // Currency display helpers
-  const currencyPrefix = isSeller ? `${currency} ` : "$";
+  if (isSeller) return null;
 
   return (
     <section ref={sectionRef} id="bidding" className="scroll-mt-36">
       <Card>
         <CardContent className="p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-1">
-            Bidding Competitiveness
-          </h2>
-          <p className="text-sm text-gray-500 mb-6">
-            Second-price auction: you pay the second-highest bid +{" "}
-            {isSeller ? `0.01 ${currency}` : "$0.01"}
+          <h2 className="text-lg font-semibold text-gray-900 mb-1">Delivery Forecast</h2>
+          <p className="text-sm text-gray-500 mb-5">
+            Adjust budget and bid to find the right delivery target for this campaign
           </p>
 
-          {draft.audienceSegments.length === 0 ? (
-            <div className="p-8 bg-gray-50 rounded-xl text-center">
-              <Users className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-              <h3 className="text-gray-700 font-medium mb-1">
-                No Audience Targets Added
-              </h3>
-              <p className="text-sm text-gray-500">
-                Add audience targets with CPM bids in the Targeting section
-                above to see competitiveness analysis
-              </p>
-            </div>
-          ) : (
-            <>
-              {/* Bid Summary Grid */}
-              <div
-                className={cn(
-                  "grid gap-4 mb-6",
-                  isSeller ? "grid-cols-4" : "grid-cols-5"
-                )}
-              >
-                <div className="p-4 bg-gray-50 rounded-lg">
-                  <span className="text-xs text-gray-500 block mb-1">
-                    Targets
+          {/* Interactive Controls */}
+          <div className="p-4 bg-gray-50 rounded-xl border border-gray-200 mb-6">
+            <div className="grid grid-cols-12 gap-4 items-end">
+              {/* Budget Input */}
+              <div className="col-span-5">
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                  Campaign Budget
+                  <span className="text-[10px] text-gray-400 font-normal ml-1">
+                    ({draft.budgetType === "daily" ? "per day" : "total"})
                   </span>
-                  <div className="text-2xl font-bold text-gray-900">
-                    {draft.audienceSegments.length}
-                  </div>
-                </div>
-                <div className="p-4 bg-gray-50 rounded-lg">
-                  <span className="text-xs text-gray-500 block mb-1">
-                    Avg CPM Bid
-                  </span>
-                  <div
+                </label>
+                <div className="relative">
+                  <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={localBudget}
+                    onChange={(e) => setLocalBudget(e.target.value)}
+                    onBlur={commitBudget}
+                    onKeyDown={(e) => e.key === "Enter" && commitBudget()}
                     className={cn(
-                      "font-bold text-gray-900",
-                      isSeller ? "text-xl" : "text-2xl"
+                      "w-full pl-8 pr-3 py-2.5 border rounded-lg text-lg font-semibold focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white",
+                      parseFloat(localBudget) > 0 && parseFloat(localBudget) < 100 ? "border-red-300" : "border-gray-300"
                     )}
-                  >
-                    {currencyPrefix}
-                    {avgBid.toFixed(2)}
-                  </div>
-                </div>
-                <div className="p-4 bg-gray-50 rounded-lg">
-                  <span className="text-xs text-gray-500 block mb-1">
-                    Bid Range
-                  </span>
-                  <div className="text-lg font-bold text-gray-900">
-                    {currencyPrefix}
-                    {isSeller ? minBid.toFixed(0) : minBid.toFixed(2)} -{" "}
-                    {isSeller
-                      ? maxBid.toFixed(0)
-                      : `$${maxBid.toFixed(2)}`}
-                  </div>
-                </div>
-
-                {/* Brand-only: Slot Multiplier column */}
-                {!isSeller && (
-                  <div className="p-4 bg-gray-50 rounded-lg">
-                    <span className="text-xs text-gray-500 block mb-1">
-                      {slotTargetingMode === "include" && Object.keys(slotGroupMultipliers).length > 0
-                        ? "Avg Slot Multiplier"
-                        : "Slot Multiplier"}
-                    </span>
-                    <div className="text-2xl font-bold text-gray-900">
-                      +{Math.round(slotMultiplierValue)}%
-                    </div>
-                  </div>
-                )}
-
-                {/* Competitiveness / Effective Avg column */}
-                <div
-                  className={cn(
-                    "p-4 rounded-lg",
-                    competitivenessLevel === "low" && "bg-red-50",
-                    competitivenessLevel === "medium" && "bg-yellow-50",
-                    competitivenessLevel === "high" && "bg-green-50"
-                  )}
-                >
-                  <span className="text-xs text-gray-500 block mb-1">
-                    {isSeller ? "Competitiveness" : "Effective Avg"}
-                  </span>
-                  <div
-                    className={cn(
-                      "font-bold",
-                      isSeller ? "text-xl" : "text-2xl",
-                      competitivenessLevel === "low" && "text-red-600",
-                      competitivenessLevel === "medium" && "text-yellow-600",
-                      competitivenessLevel === "high" && "text-green-600"
-                    )}
-                  >
-                    {isSeller
-                      ? competitivenessLevel === "low"
-                        ? "Low"
-                        : competitivenessLevel === "medium"
-                        ? "Medium"
-                        : "High"
-                      : `$${effectiveAvgBid.toFixed(2)}`}
-                  </div>
-                </div>
-              </div>
-
-              {/* Competitiveness Bar */}
-              <div className="mb-6 p-4 bg-white border rounded-lg">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm font-medium text-gray-700">
-                    Overall Competitiveness
-                  </span>
-                  <span
-                    className={cn(
-                      "text-sm font-bold px-3 py-1 rounded-full",
-                      competitivenessLevel === "low" &&
-                        "bg-red-100 text-red-700",
-                      competitivenessLevel === "medium" &&
-                        "bg-yellow-100 text-yellow-700",
-                      competitivenessLevel === "high" &&
-                        "bg-green-100 text-green-700"
-                    )}
-                  >
-                    {competitivenessLevel === "low"
-                      ? "Low"
-                      : competitivenessLevel === "medium"
-                      ? "Medium"
-                      : "High"}
-                  </span>
-                </div>
-                <div className="h-4 bg-gray-100 rounded-full overflow-hidden">
-                  <div
-                    className={cn(
-                      "h-full rounded-full transition-all",
-                      competitivenessLevel === "low" &&
-                        "bg-gradient-to-r from-red-400 to-red-500",
-                      competitivenessLevel === "medium" &&
-                        "bg-gradient-to-r from-yellow-400 to-yellow-500",
-                      competitivenessLevel === "high" &&
-                        "bg-gradient-to-r from-green-400 to-green-500"
-                    )}
-                    style={{
-                      width: isSeller
-                        ? `${
-                            competitivenessLevel === "low"
-                              ? 30
-                              : competitivenessLevel === "medium"
-                              ? 60
-                              : 90
-                          }%`
-                        : `${Math.min(100, (effectiveAvgBid / 10) * 100)}%`,
-                    }}
+                    placeholder="1,000"
                   />
                 </div>
-                <p className="text-xs text-gray-500 mt-2">
-                  {competitivenessLevel === "low"
-                    ? isSeller
-                      ? "Your bids may not win many auctions. Consider increasing target CPM bids."
-                      : "Your bids may not win many auctions. Consider increasing target CPM bids or adding a slot multiplier."
-                    : competitivenessLevel === "medium"
-                    ? "Your bids are competitive for most placements. Good balance of cost and reach."
-                    : "Your bids are highly competitive. You should win most auctions."}
+                {parseFloat(localBudget) > 0 && parseFloat(localBudget) < 100 && (
+                  <p className="text-[10px] text-red-500 mt-1">Minimum budget is $100</p>
+                )}
+              </div>
+
+              {/* CPM Bid Input */}
+              <div className="col-span-4">
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                  CPM Bid
+                  <span className="text-[10px] text-gray-400 font-normal ml-1">per 1,000 views</span>
+                </label>
+                <div className="relative">
+                  <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={localBid}
+                    onChange={(e) => setLocalBid(e.target.value)}
+                    onBlur={commitBid}
+                    onKeyDown={(e) => e.key === "Enter" && commitBid()}
+                    className="w-full pl-8 pr-3 py-2.5 border border-gray-300 rounded-lg text-lg font-semibold focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+                    placeholder="5.00"
+                  />
+                </div>
+                {forecast.bidAlignment === "below" && (
+                  <p className="text-[10px] text-amber-600 mt-1">
+                    Rec: ${forecast.recommended.toFixed(2)}
+                  </p>
+                )}
+              </div>
+
+              {/* Live Expected Views */}
+              <div className="col-span-3">
+                <div className="p-2.5 bg-primary-50 rounded-lg text-center border border-primary-200">
+                  <div className="text-xs text-primary-600 font-medium mb-0.5">Expected Views</div>
+                  <div className="text-xl font-bold text-primary-700">{formatNumber(forecast.expectedViews)}</div>
+                  <div className="text-[10px] text-primary-500">(Budget &divide; Bid) &times; 1K</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Forecast Cards Grid */}
+          <div className="grid grid-cols-4 gap-4 mb-6">
+            <div className="p-4 bg-primary-50 rounded-lg text-center">
+              <Eye className="w-5 h-5 text-primary-500 mx-auto mb-1.5" />
+              <div className="text-2xl font-bold text-primary-700">{formatNumber(forecast.expectedViews)}</div>
+              <p className="text-xs text-primary-600 mt-0.5">Expected Views</p>
+              <p className="text-[10px] text-gray-400">from budget &amp; bid</p>
+            </div>
+            <div className="p-4 bg-gray-50 rounded-lg text-center">
+              <BarChart3 className="w-5 h-5 text-gray-400 mx-auto mb-1.5" />
+              <div className="text-2xl font-bold text-gray-900">~{formatNumber(forecast.availableViews)}</div>
+              <p className="text-xs text-gray-600 mt-0.5">Available Views</p>
+              <p className="text-[10px] text-gray-400">estimated inventory for targeting</p>
+            </div>
+            <div className="p-4 bg-gray-50 rounded-lg text-center">
+              <Users className="w-5 h-5 text-gray-400 mx-auto mb-1.5" />
+              <div className="text-lg font-bold text-gray-900">{forecast.targetingLevel}</div>
+              <p className="text-xs text-gray-600 mt-0.5">Targeting Level</p>
+              <p className="text-[10px] text-gray-400">{audienceCount} segment{audienceCount !== 1 ? "s" : ""}</p>
+            </div>
+            <div className={cn(
+              "p-4 rounded-lg text-center",
+              forecast.feasibility === "comfortable" && "bg-green-50",
+              forecast.feasibility === "tight" && "bg-amber-50",
+              forecast.feasibility === "insufficient" && "bg-red-50"
+            )}>
+              {forecast.feasibility === "comfortable" && <CheckCircle className="w-5 h-5 text-green-500 mx-auto mb-1.5" />}
+              {forecast.feasibility === "tight" && <AlertTriangle className="w-5 h-5 text-amber-500 mx-auto mb-1.5" />}
+              {forecast.feasibility === "insufficient" && <AlertTriangle className="w-5 h-5 text-red-500 mx-auto mb-1.5" />}
+              <div className={cn(
+                "text-lg font-bold",
+                forecast.feasibility === "comfortable" && "text-green-700",
+                forecast.feasibility === "tight" && "text-amber-700",
+                forecast.feasibility === "insufficient" && "text-red-700"
+              )}>
+                {forecast.feasibility === "comfortable" ? "Feasible" : forecast.feasibility === "tight" ? "Tight" : "Limited"}
+              </div>
+              <p className={cn(
+                "text-xs mt-0.5",
+                forecast.feasibility === "comfortable" && "text-green-600",
+                forecast.feasibility === "tight" && "text-amber-600",
+                forecast.feasibility === "insufficient" && "text-red-600"
+              )}>Delivery Outlook</p>
+            </div>
+          </div>
+
+          {/* Delivery Feasibility Message */}
+          <div className={cn(
+            "p-4 rounded-lg border mb-6",
+            forecast.feasibility === "comfortable" && "bg-green-50 border-green-200",
+            forecast.feasibility === "tight" && "bg-amber-50 border-amber-200",
+            forecast.feasibility === "insufficient" && "bg-red-50 border-red-200"
+          )}>
+            <div className="flex items-start gap-3">
+              {forecast.feasibility === "comfortable" && <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />}
+              {forecast.feasibility === "tight" && <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />}
+              {forecast.feasibility === "insufficient" && <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />}
+              <div>
+                <p className={cn(
+                  "text-sm font-medium",
+                  forecast.feasibility === "comfortable" && "text-green-800",
+                  forecast.feasibility === "tight" && "text-amber-800",
+                  forecast.feasibility === "insufficient" && "text-red-800"
+                )}>
+                  {forecast.feasibility === "comfortable" && "Inventory comfortably supports this campaign."}
+                  {forecast.feasibility === "tight" && "Inventory is tight for this targeting."}
+                  {forecast.feasibility === "insufficient" && "Targeting limits available inventory."}
+                </p>
+                <p className={cn(
+                  "text-xs mt-1",
+                  forecast.feasibility === "comfortable" && "text-green-600",
+                  forecast.feasibility === "tight" && "text-amber-600",
+                  forecast.feasibility === "insufficient" && "text-red-600"
+                )}>
+                  {forecast.feasibility === "comfortable" && `Available inventory (~${formatNumber(forecast.availableViews)}) is well above your expected delivery (${formatNumber(forecast.expectedViews)}).`}
+                  {forecast.feasibility === "tight" && `Available inventory (~${formatNumber(forecast.availableViews)}) is close to your expected delivery (${formatNumber(forecast.expectedViews)}). Consider broadening targeting if full delivery is critical.`}
+                  {forecast.feasibility === "insufficient" && `Available inventory (~${formatNumber(forecast.availableViews)}) is below your expected delivery (${formatNumber(forecast.expectedViews)}). Reduce targeting constraints, increase bid, or lower expected delivery.`}
                 </p>
               </div>
+            </div>
+          </div>
 
-              {/* Performance Forecast */}
-              <div
-                className={cn(
-                  "p-4 rounded-xl border",
-                  isSeller
-                    ? "bg-gradient-to-r from-amber-50 to-orange-50 border-amber-100"
-                    : "bg-gradient-to-r from-primary-50 to-blue-50 border-primary-100"
-                )}
-              >
-                <h4 className="font-medium text-gray-900 mb-4">
-                  Estimated Performance
-                </h4>
-                <div className="grid grid-cols-4 gap-4">
-                  <div className="text-center p-3 bg-white rounded-lg">
-                    <div className="text-2xl font-bold text-gray-900">
-                      {formatNumber(estimatedReach)}
-                    </div>
-                    <p className="text-xs text-gray-500">
-                      Available Reach/day
-                    </p>
-                  </div>
-                  <div className="text-center p-3 bg-white rounded-lg">
-                    <div
-                      className={cn(
-                        "text-2xl font-bold",
-                        isSeller ? "text-amber-600" : "text-primary-600"
-                      )}
-                    >
-                      {formatNumber(estimatedViews)}
-                    </div>
-                    <p className="text-xs text-gray-500">Est. Daily Views</p>
-                  </div>
-                  <div className="text-center p-3 bg-white rounded-lg">
-                    <div className="text-2xl font-bold text-gray-900">
-                      {winRate}%
-                    </div>
-                    <p className="text-xs text-gray-500">Est. Win Rate</p>
-                  </div>
-                  <div className="text-center p-3 bg-white rounded-lg">
-                    <div className="text-2xl font-bold text-green-600">
-                      {budgetUtilization}%
-                    </div>
-                    <p className="text-xs text-gray-500">
-                      Budget Utilization
-                    </p>
-                  </div>
+          {/* Recommended Bid — inventory-access framing */}
+          <div className="p-4 bg-gradient-to-r from-primary-50 to-blue-50 rounded-lg border border-primary-100">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-primary-500" />
+                <span className="text-sm font-medium text-gray-900">Recommended CPM Bid</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="text-right">
+                  <div className="text-lg font-bold text-primary-700">${forecast.recommended.toFixed(2)}</div>
+                  <span className="text-[10px] text-gray-400">for this targeting</span>
                 </div>
-
-                {/* Brand-only: Budget summary row */}
-                {!isSeller && (
-                  <div className="mt-4 pt-4 border-t border-primary-100 grid grid-cols-2 gap-4">
-                    <div className="flex items-center justify-between p-2 bg-white rounded-lg">
-                      <span className="text-sm text-gray-600">
-                        Daily Budget
-                      </span>
-                      <span className="font-semibold text-gray-900">
-                        ${formatNumber(draft.budget)}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between p-2 bg-white rounded-lg">
-                      <span className="text-sm text-gray-600">
-                        Max Total Spend
-                      </span>
-                      <span className="font-semibold text-gray-900">
-                        {draft.startDate && draft.endDate && !draft.noEndDate
-                          ? `$${formatNumber(
-                              draft.budget *
-                                Math.ceil(
-                                  (draft.endDate.getTime() -
-                                    draft.startDate.getTime()) /
-                                    (1000 * 60 * 60 * 24)
-                                )
-                            )}`
-                          : "Unlimited"}
-                      </span>
-                    </div>
-                  </div>
+                {forecast.bidAlignment === "below" && (
+                  <button
+                    onClick={() => {
+                      const rec = forecast.recommended;
+                      setLocalBid(rec.toFixed(2));
+                      updateDraft({ bidAmount: rec });
+                    }}
+                    className="px-3 py-1.5 text-xs font-medium bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors whitespace-nowrap"
+                  >
+                    Apply ${forecast.recommended.toFixed(2)}
+                  </button>
                 )}
               </div>
-            </>
-          )}
+            </div>
+            <div className="flex items-start gap-2">
+              <Info className="w-3.5 h-3.5 text-gray-400 flex-shrink-0 mt-0.5" />
+              <p className={cn(
+                "text-xs",
+                forecast.bidAlignment === "aligned" ? "text-green-700" : "text-amber-700"
+              )}>
+                {forecast.bidAlignment === "aligned"
+                  ? "Your current bid provides good access to available inventory for this targeting."
+                  : `Your current bid ($${forecast.bid.toFixed(2)}) may limit available inventory for this targeting. Increasing bid improves delivery likelihood.`}
+              </p>
+            </div>
+          </div>
         </CardContent>
       </Card>
     </section>

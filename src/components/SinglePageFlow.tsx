@@ -1469,6 +1469,39 @@ export function SinglePageFlow({ onCampaignSubmit }: SinglePageFlowProps) {
                           {parseFloat(budgetStr) > 0 && parseFloat(budgetStr) < 100 && (
                             <p className="text-xs text-red-500 mt-1">Minimum budget is $100</p>
                           )}
+
+                          {/* CPM Bid — primary input next to budget */}
+                          {draft.pricingModel === "cpm" && draft.entryType === "brand" && (
+                            <div className="mt-3 flex items-center gap-2">
+                              <span className="text-xs text-gray-700 font-medium whitespace-nowrap">CPM Bid</span>
+                              <div className="relative w-24">
+                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+                                <input
+                                  type="text"
+                                  inputMode="decimal"
+                                  value={bidAmountStr}
+                                  onChange={(e) => {
+                                    setBidAmountStr(e.target.value);
+                                    const num = parseFloat(e.target.value);
+                                    if (!isNaN(num) && num > 0) updateDraft({ bidAmount: num });
+                                  }}
+                                  onBlur={() => {
+                                    const num = parseFloat(bidAmountStr);
+                                    if (!isNaN(num) && num > 0) updateDraft({ bidAmount: num });
+                                    else setBidAmountStr(draft.bidAmount.toString());
+                                  }}
+                                  className="w-full pl-6 pr-2 py-1.5 border border-gray-300 rounded-lg text-sm font-semibold focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                                  placeholder="5.00"
+                                />
+                              </div>
+                              <span className="text-[10px] text-gray-400">per 1,000 views</span>
+                              {draft.budget >= 100 && draft.bidAmount > 0 && (
+                                <span className="text-xs text-primary-600 font-medium ml-auto">
+                                  ~{formatNumber(Math.round((draft.budget / draft.bidAmount) * 1000))} views
+                                </span>
+                              )}
+                            </div>
+                          )}
                           
                           {/* Pacing Row */}
                           <div className="mt-3">
@@ -1750,111 +1783,111 @@ export function SinglePageFlow({ onCampaignSubmit }: SinglePageFlowProps) {
                   ) : (
                     /* CPM Submit Review */
                     (() => {
-                      // Calculate estimated views for CPM
-                      const targetBids = draft.audienceSegments.map(s => s.bid);
-                      const avgBid = targetBids.length > 0 ? targetBids.reduce((a, b) => a + b, 0) / targetBids.length : draft.bidAmount || 5;
-                      // For include mode, compute average of group multipliers; for exclude, use single multiplier
-                      const slotMultiplierValue = (() => {
-                        if (slotTargetingMode === "include" && Object.keys(slotGroupMultipliers).length > 0) {
-                          const vals = Object.values(slotGroupMultipliers).map(v => parseFloat(v) || 0);
-                          return vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
-                        }
-                        return parseFloat(slotMultiplier) || 0;
-                      })();
-                      const effectiveAvgBid = avgBid * (1 + slotMultiplierValue / 100);
-                      const winRate = effectiveAvgBid < 3 ? 30 : effectiveAvgBid < 6 ? 60 : 85;
-                      
-                      // Calculate campaign duration
+                      const bid = draft.bidAmount || 5;
+                      const expectedViews = bid > 0 ? Math.round((draft.budget / bid) * 1000) : 0;
+
+                      const BASE_INV = 15_000_000;
+                      const aCnt = draft.audienceSegments.length;
+                      const hasComp = draft.audienceSegments.some(s => s.conditions && s.conditions.length > 1);
+                      const slCnt = slotTargetingMode === "include" ? draft.slotIds.length : draft.excludedSlotIds.length;
+                      let avail = BASE_INV;
+                      if (aCnt > 0) avail *= Math.max(0.02, 1 - aCnt * 0.18);
+                      if (hasComp) avail *= 0.6;
+                      if (slotTargetingMode === "include" && slCnt > 0) avail *= Math.min(1, slCnt * 0.12);
+                      else if (slotTargetingMode === "exclude" && slCnt > 0) avail *= Math.max(0.3, 1 - slCnt * 0.04);
+                      const availableViews = Math.round(avail);
+
+                      let recBid = 3.5;
+                      if (aCnt >= 4) recBid = 6.5;
+                      else if (aCnt >= 2) recBid = 5.0;
+                      else if (aCnt >= 1) recBid = 4.0;
+                      if (hasComp) recBid += 1.0;
+
+                      const feasibility = availableViews >= expectedViews * 1.3 ? "comfortable" : availableViews >= expectedViews * 0.9 ? "tight" : "insufficient";
+
                       const hasDuration = draft.startDate && draft.endDate && !draft.noEndDate;
-                      const campaignDays = hasDuration 
+                      const campaignDays = hasDuration
                         ? Math.ceil((draft.endDate!.getTime() - draft.startDate!.getTime()) / (1000 * 60 * 60 * 24)) + 1
                         : null;
-                      
-                      // Derive effective daily budget regardless of budgetType
-                      const effectiveDailyBudget = draft.budgetType === "daily"
-                        ? draft.budget
-                        : (campaignDays ? draft.budget / campaignDays : draft.budget);
-                      
-                      const estDailyViews = Math.round(Math.min(estimatedReach, (effectiveDailyBudget / Math.max(effectiveAvgBid, 1)) * 1000) * (winRate / 100));
-                      const estTotalViews = campaignDays ? estDailyViews * campaignDays : null;
                       const maxTotalSpend = draft.budgetType === "daily" ? (campaignDays ? draft.budget * campaignDays : draft.budget) : draft.budget;
-                      
-                      // Estimated spend based on win rate & effective bids
-                      const estDailySpend = effectiveAvgBid > 0 ? (estDailyViews * effectiveAvgBid) / 1000 : 0;
-                      const estTotalSpend = campaignDays ? estDailySpend * campaignDays : estDailySpend;
                       const creditsAvail = availableCredits.USD;
-                      const creditApplied = useCredits ? Math.min(creditsAvail, estTotalSpend) : 0;
-                      const outOfPocket = Math.max(0, estTotalSpend - creditApplied);
-                      
+                      const creditApplied = useCredits ? Math.min(creditsAvail, maxTotalSpend) : 0;
+                      const outOfPocket = Math.max(0, maxTotalSpend - creditApplied);
+
                       return (
                         <div>
                           <h3 className="font-semibold text-gray-900 mb-3">Ready to submit?</h3>
-                          <div className="grid grid-cols-4 gap-4 text-sm mb-3">
+                          <div className="grid grid-cols-5 gap-3 text-sm mb-3">
                             <div>
                               <span className="text-gray-500 block text-xs">{draft.budgetType === "daily" ? "Daily Budget" : "Total Budget"}</span>
                               <span className="font-semibold text-gray-900">${formatNumber(draft.budget)}</span>
                             </div>
                             <div>
+                              <span className="text-gray-500 block text-xs">CPM Bid</span>
+                              <span className="font-semibold text-gray-900">${bid.toFixed(2)}</span>
+                              <span className="text-[10px] text-gray-400 block">Rec: ${recBid.toFixed(2)}</span>
+                            </div>
+                            <div>
+                              <span className="text-gray-500 block text-xs">Est. Views</span>
+                              <span className="font-semibold text-primary-600">{formatNumber(expectedViews)}</span>
+                            </div>
+                            <div>
+                              <span className="text-gray-500 block text-xs">Avail. Views</span>
+                              <span className="font-semibold text-gray-900">~{formatNumber(availableViews)}</span>
+                            </div>
+                            <div>
                               <span className="text-gray-500 block text-xs">Schedule</span>
-                              <span className="font-semibold text-gray-900">
+                              <span className="font-semibold text-gray-900 text-xs">
                                 {draft.startDate ? draft.startDate.toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—"}
                                 {" → "}
                                 {draft.noEndDate ? "Ongoing" : draft.endDate ? draft.endDate.toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—"}
                               </span>
                             </div>
-                            <div>
-                              <span className="text-gray-500 block text-xs">{hasDuration ? `Est. Views (${campaignDays}d)` : "Est. Daily Views"}</span>
-                              <span className="font-semibold text-primary-600">
-                                {hasDuration ? formatNumber(estTotalViews || 0) : formatNumber(estDailyViews)}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-gray-500 block text-xs">Win Rate</span>
-                              <span className="font-semibold text-gray-900">~{winRate}%</span>
-                            </div>
                           </div>
-                          
-                          {/* Estimated Spend Summary */}
+
+                          {/* Delivery feasibility + audiences */}
+                          <div className={cn(
+                            "flex items-center gap-2 px-3 py-2 rounded-lg text-xs mb-3",
+                            feasibility === "comfortable" && "bg-green-50 text-green-700",
+                            feasibility === "tight" && "bg-amber-50 text-amber-700",
+                            feasibility === "insufficient" && "bg-red-50 text-red-700"
+                          )}>
+                            {feasibility === "comfortable" && <CheckCircle className="w-3.5 h-3.5 flex-shrink-0" />}
+                            {feasibility !== "comfortable" && <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />}
+                            <span>
+                              {feasibility === "comfortable" && "Inventory comfortably supports this campaign."}
+                              {feasibility === "tight" && "Inventory is tight for this targeting."}
+                              {feasibility === "insufficient" && "Targeting constraints may prevent full delivery."}
+                            </span>
+                            {aCnt > 0 && <span className="ml-auto text-[10px] opacity-70">{aCnt} audience segment{aCnt !== 1 ? "s" : ""}</span>}
+                          </div>
+
+                          {/* Spend Summary */}
                           <div className="p-3 bg-gray-50 rounded-lg mb-3">
                             <div className="flex items-center justify-between gap-4 text-sm">
                               <div className="flex items-center gap-4">
                                 <div>
-                                  <span className="text-gray-500 text-xs block">Est. Spend{campaignDays ? ` (${campaignDays}d)` : "/day"}</span>
-                                  <span className="font-semibold text-gray-900">${formatNumber(Math.round(campaignDays ? estTotalSpend : estDailySpend))}</span>
+                                  <span className="text-gray-500 text-xs block">Max Spend</span>
+                                  <span className="font-semibold text-gray-900">${formatNumber(maxTotalSpend)}</span>
                                 </div>
                                 {campaignDays && (
                                   <div>
-                                    <span className="text-gray-500 text-xs block">Budget Cap</span>
-                                    <span className="font-semibold text-gray-900">${formatNumber(maxTotalSpend)}</span>
-                                  </div>
-                                )}
-                                {draft.audienceSegments.length > 0 && (
-                                  <div>
-                                    <span className="text-gray-500 text-xs block">Avg Bid (eff.)</span>
-                                    <span className="font-semibold text-gray-900">${effectiveAvgBid.toFixed(2)} CPM</span>
+                                    <span className="text-gray-500 text-xs block">Duration</span>
+                                    <span className="font-semibold text-gray-900">{campaignDays}d</span>
                                   </div>
                                 )}
                               </div>
-                              {/* Credits + Out of pocket */}
                               <div className="flex items-center gap-3 shrink-0">
                                 <div className="flex items-center gap-2 px-2.5 py-1 bg-green-50 border border-green-200 rounded-lg">
                                   <label className="flex items-center gap-1.5 cursor-pointer">
-                                    <input
-                                      type="checkbox"
-                                      checked={useCredits}
-                                      onChange={(e) => setUseCredits(e.target.checked)}
-                                      className="w-3 h-3 rounded border-green-300 text-green-600 focus:ring-green-500"
-                                    />
+                                    <input type="checkbox" checked={useCredits} onChange={(e) => setUseCredits(e.target.checked)} className="w-3 h-3 rounded border-green-300 text-green-600 focus:ring-green-500" />
                                     <span className="text-[11px] text-green-700">Credits</span>
                                   </label>
                                   <span className="text-[11px] font-medium text-green-700">${creditsAvail.toLocaleString()}</span>
                                 </div>
                                 <div className="text-right">
                                   <span className="text-gray-500 text-xs block">Out-of-Pocket</span>
-                                  <span className={cn(
-                                    "font-bold",
-                                    useCredits && creditApplied > 0 ? "text-green-600" : "text-gray-900"
-                                  )}>
+                                  <span className={cn("font-bold", useCredits && creditApplied > 0 ? "text-green-600" : "text-gray-900")}>
                                     {outOfPocket <= 0 && useCredits ? "$0" : `$${formatNumber(Math.round(outOfPocket))}`}
                                   </span>
                                 </div>

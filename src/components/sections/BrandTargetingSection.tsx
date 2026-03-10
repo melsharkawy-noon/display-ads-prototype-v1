@@ -54,25 +54,19 @@ export const BrandTargetingSection = memo(function BrandTargetingSection({
 
   // Brand targeting state
   const [brandTargetingCategory, setBrandTargetingCategory] = useState<string | null>("reengagement");
-  const [showBrandBulkBidMenu, setShowBrandBulkBidMenu] = useState(false);
-  const [brandCustomBulkBid, setBrandCustomBulkBid] = useState("5.00");
 
-  // Audience targeting form state (local to brand)
+  // Audience targeting form state (local to brand) — bid inputs removed (campaign-level bid now)
   const [reengAction, setReengAction] = useState("");
   const [reengLookback, setReengLookback] = useState("30");
   const [reengTargetType, setReengTargetType] = useState("");
   const [reengTargetValue, setReengTargetValue] = useState("");
-  const [reengBid, setReengBid] = useState("");
   const [demoType, setDemoType] = useState("");
   const [demoValue, setDemoValue] = useState("");
-  const [demoBid, setDemoBid] = useState("");
   const [inMarketCategory, setInMarketCategory] = useState("");
   const [inMarketSubcategory, setInMarketSubcategory] = useState("");
-  const [inMarketBid, setInMarketBid] = useState("");
 
   // Compound segment staging area (managed flow AND logic)
   const [stagedConditions, setStagedConditions] = useState<AudienceCondition[]>([]);
-  const [segmentBid, setSegmentBid] = useState("");
 
   // Slot targeting local state
   const [slotPageFilter, setSlotPageFilter] = useState<string>("all");
@@ -134,7 +128,7 @@ export const BrandTargetingSection = memo(function BrandTargetingSection({
       category: reengTargetType === "category" ? reengTargetValue : undefined,
     };
     setStagedConditions(prev => [...prev, condition]);
-    setReengAction(""); setReengTargetType(""); setReengTargetValue(""); setReengBid("");
+    setReengAction(""); setReengTargetType(""); setReengTargetValue("");
   };
 
   const stageDemographicCondition = () => {
@@ -144,7 +138,7 @@ export const BrandTargetingSection = memo(function BrandTargetingSection({
       name: `${demoType.charAt(0).toUpperCase() + demoType.slice(1)}: ${demoLabels[demoType]?.[demoValue] || demoValue}`,
     };
     setStagedConditions(prev => [...prev, condition]);
-    setDemoType(""); setDemoValue(""); setDemoBid("");
+    setDemoType(""); setDemoValue("");
   };
 
   const stageInMarketCondition = () => {
@@ -160,7 +154,7 @@ export const BrandTargetingSection = memo(function BrandTargetingSection({
       subcategory: inMarketSubcategory || undefined,
     };
     setStagedConditions(prev => [...prev, condition]);
-    setInMarketCategory(""); setInMarketSubcategory(""); setInMarketBid("");
+    setInMarketCategory(""); setInMarketSubcategory("");
   };
 
   const removeStagedCondition = (index: number) => {
@@ -196,7 +190,7 @@ export const BrandTargetingSection = memo(function BrandTargetingSection({
   const commitStagedSegment = () => {
     if (stagedConditions.length === 0) return;
     const bidRange = getStagedBidRange();
-    const bid = parseFloat(segmentBid) || bidRange.recommended;
+    const bid = bidRange.recommended;
     
     // Build compound segment
     const isCompound = stagedConditions.length > 1;
@@ -220,25 +214,10 @@ export const BrandTargetingSection = memo(function BrandTargetingSection({
     };
     updateDraft({ audienceSegments: [...draft.audienceSegments, newSegment] });
     setStagedConditions([]);
-    setSegmentBid("");
   };
 
   const removeBrandSegment = (segmentId: string) => {
     updateDraft({ audienceSegments: draft.audienceSegments.filter(s => s.id !== segmentId) });
-  };
-
-  const updateBrandSegmentBid = (segmentId: string, bid: number) => {
-    updateDraft({ audienceSegments: draft.audienceSegments.map(s => s.id === segmentId ? { ...s, bid } : s) });
-  };
-
-  const applyBrandBulkBid = (mode: "custom" | "aggressive" | "recommended") => {
-    updateDraft({
-      audienceSegments: draft.audienceSegments.map(s => ({
-        ...s,
-        bid: mode === "custom" ? parseFloat(brandCustomBulkBid) || s.bid : mode === "aggressive" ? s.bidRange.max : s.suggestedBid
-      }))
-    });
-    setShowBrandBulkBidMenu(false);
   };
 
   // Calculate recommended slot multiplier based on targeting mode
@@ -380,7 +359,7 @@ export const BrandTargetingSection = memo(function BrandTargetingSection({
                     <div className="p-4 space-y-3 bg-white">
                       <div>
                         <label className="block text-xs font-medium text-gray-600 mb-1">Action</label>
-                        <select value={reengAction} onChange={(e) => { setReengAction(e.target.value); setReengTargetType(""); setReengTargetValue(""); setReengBid(""); }} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+                        <select value={reengAction} onChange={(e) => { setReengAction(e.target.value); setReengTargetType(""); setReengTargetValue(""); }} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
                           <option value="">Select action...</option>
                           <option value="viewed_products">Viewed Products</option>
                           <option value="purchased_products">Purchased Products</option>
@@ -399,7 +378,7 @@ export const BrandTargetingSection = memo(function BrandTargetingSection({
                       </div>
                       <div className={cn(!reengAction && "opacity-40 pointer-events-none")}>
                         <label className="block text-xs font-medium text-gray-600 mb-1">Target Type</label>
-                        <select value={reengTargetType} onChange={(e) => { setReengTargetType(e.target.value); setReengTargetValue(""); setReengBid(""); }} disabled={!reengAction} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white disabled:bg-gray-50">
+                        <select value={reengTargetType} onChange={(e) => { setReengTargetType(e.target.value); setReengTargetValue(""); }} disabled={!reengAction} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white disabled:bg-gray-50">
                           <option value="">Select type...</option>
                           <option value="brand">Brand</option>
                           <option value="category">Category</option>
@@ -407,7 +386,7 @@ export const BrandTargetingSection = memo(function BrandTargetingSection({
                       </div>
                       <div className={cn(!reengTargetType && "opacity-40 pointer-events-none")}>
                         <label className="block text-xs font-medium text-gray-600 mb-1">{reengTargetType === "brand" ? "Brand" : reengTargetType === "category" ? "Category" : "Select Value"}</label>
-                        <select value={reengTargetValue} onChange={(e) => { setReengTargetValue(e.target.value); if (e.target.value && reengAction && reengTargetType) { const r = getBrandBidRange(reengAction, reengTargetType); setReengBid(r.recommended.toFixed(2)); } }} disabled={!reengTargetType} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white disabled:bg-gray-50">
+                        <select value={reengTargetValue} onChange={(e) => { setReengTargetValue(e.target.value); }} disabled={!reengTargetType} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white disabled:bg-gray-50">
                           <option value="">Select {reengTargetType || "value"}...</option>
                           {reengTargetType === "brand" && brands.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
                           {reengTargetType === "category" && categories.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
@@ -431,7 +410,7 @@ export const BrandTargetingSection = memo(function BrandTargetingSection({
                     <div className="p-4 space-y-3 bg-white">
                       <div>
                         <label className="block text-xs font-medium text-gray-600 mb-1">Type</label>
-                        <select value={demoType} onChange={(e) => { setDemoType(e.target.value); setDemoValue(""); setDemoBid(""); }} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+                        <select value={demoType} onChange={(e) => { setDemoType(e.target.value); setDemoValue(""); }} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
                           <option value="">Select type...</option>
                           <option value="age">Age Range</option>
                           <option value="gender">Gender</option>
@@ -440,7 +419,7 @@ export const BrandTargetingSection = memo(function BrandTargetingSection({
                       </div>
                       <div className={cn(!demoType && "opacity-40 pointer-events-none")}>
                         <label className="block text-xs font-medium text-gray-600 mb-1">{demoType === "age" ? "Age Range" : demoType === "gender" ? "Gender" : demoType === "income" ? "Income Level" : "Value"}</label>
-                        <select value={demoValue} onChange={(e) => { setDemoValue(e.target.value); if (e.target.value && demoType) { const r = getBrandBidRange("", "", demoType); setDemoBid(r.recommended.toFixed(2)); } }} disabled={!demoType} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white disabled:bg-gray-50">
+                        <select value={demoValue} onChange={(e) => { setDemoValue(e.target.value); }} disabled={!demoType} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white disabled:bg-gray-50">
                           <option value="">Select value...</option>
                           {demoType === "age" && <><option value="18_24">18-24</option><option value="25_34">25-34</option><option value="35_44">35-44</option><option value="45_54">45-54</option><option value="55_plus">55+</option></>}
                           {demoType === "gender" && <><option value="male">Male</option><option value="female">Female</option></>}
@@ -466,7 +445,7 @@ export const BrandTargetingSection = memo(function BrandTargetingSection({
                     <div className="p-4 space-y-3 bg-white">
                       <div>
                         <label className="block text-xs font-medium text-gray-600 mb-1">Category</label>
-                        <select value={inMarketCategory} onChange={(e) => { setInMarketCategory(e.target.value); setInMarketSubcategory(""); if (e.target.value) { const r = getBrandBidRange("in_market", e.target.value); setInMarketBid(r.recommended.toFixed(2)); } else { setInMarketBid(""); } }} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+                        <select value={inMarketCategory} onChange={(e) => { setInMarketCategory(e.target.value); setInMarketSubcategory(""); }} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
                           <option value="">Select category...</option>
                           {categories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
                         </select>
@@ -502,7 +481,7 @@ export const BrandTargetingSection = memo(function BrandTargetingSection({
                     </span>
                     {stagedConditions.length > 0 && (
                       <button 
-                        onClick={() => { setStagedConditions([]); setSegmentBid(""); }}
+                        onClick={() => { setStagedConditions([]); }}
                         className="text-[10px] text-gray-400 hover:text-red-500"
                       >
                         Clear
@@ -541,28 +520,15 @@ export const BrandTargetingSection = memo(function BrandTargetingSection({
                         ))}
                       </div>
                       
-                      {/* Bid input + Add Segment button */}
+                      {/* Add Segment button */}
                       <div className="flex items-center gap-2 pt-1">
-                        <div className="relative flex-1">
-                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs">$</span>
-                          <input
-                            type="text"
-                            inputMode="decimal"
-                            value={segmentBid}
-                            onChange={(e) => setSegmentBid(e.target.value)}
-                            placeholder={getStagedBidRange().recommended.toFixed(2)}
-                            className="w-full pl-6 pr-2 py-1.5 border border-gray-300 rounded-lg text-sm"
-                          />
-                        </div>
-                        <span className="text-[10px] text-gray-400 whitespace-nowrap shrink-0">
-                          {getStagedBidRange().min.toFixed(2)}-{getStagedBidRange().max.toFixed(2)}
-                        </span>
                         <button
                           onClick={commitStagedSegment}
-                          className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-semibold hover:bg-green-700 whitespace-nowrap shrink-0"
+                          className="px-4 py-1.5 bg-green-600 text-white rounded-lg text-xs font-semibold hover:bg-green-700 whitespace-nowrap"
                         >
                           Add Segment →
                         </button>
+                        <span className="text-[10px] text-gray-400">Bid is set at campaign level</span>
                       </div>
                     </div>
                   )}
@@ -576,35 +542,7 @@ export const BrandTargetingSection = memo(function BrandTargetingSection({
                     <span className="font-medium text-gray-900">{draft.audienceSegments.length} Segment{draft.audienceSegments.length !== 1 ? "s" : ""} Added</span>
                     <div className="flex items-center gap-2">
                       {draft.audienceSegments.length > 0 && (
-                        <>
-                          <div className="relative">
-                            <button onClick={() => setShowBrandBulkBidMenu(!showBrandBulkBidMenu)} className="text-xs text-primary-600 hover:text-primary-700 font-medium flex items-center gap-1">
-                              Apply bid to all <ChevronDown className="w-3 h-3" />
-                            </button>
-                            {showBrandBulkBidMenu && (
-                              <div className="absolute right-0 top-full mt-1 w-64 bg-white border rounded-lg shadow-lg z-20">
-                                <div className="p-2 border-b">
-                                  <div className="text-xs font-medium text-gray-700 mb-1">Custom CPM Bid (USD)</div>
-                                  <div className="flex items-center gap-2">
-                                    <div className="relative flex-1">
-                                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-gray-400">$</span>
-                                      <input type="text" inputMode="decimal" value={brandCustomBulkBid} onChange={(e) => setBrandCustomBulkBid(e.target.value)} className="w-full pl-6 pr-2 py-1 border rounded text-sm" />
-                                    </div>
-                                    <button onClick={() => applyBrandBulkBid("custom")} className="px-2 py-1 bg-primary-500 text-white rounded text-xs font-medium hover:bg-primary-600">Apply</button>
-                                  </div>
-                                </div>
-                                <button onClick={() => applyBrandBulkBid("aggressive")} className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center justify-between">
-                                  <span>Aggressive Bid</span><span className="text-xs text-gray-500">Max for each target</span>
-                                </button>
-                                <button onClick={() => applyBrandBulkBid("recommended")} className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center justify-between border-t">
-                                  <span>Recommended Bid</span><span className="text-xs text-gray-500">Optimal for each target</span>
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                          <span className="text-gray-300">|</span>
-                          <button onClick={() => updateDraft({ audienceSegments: [] })} className="text-xs text-red-500 hover:text-red-700">Clear all</button>
-                        </>
+                        <button onClick={() => updateDraft({ audienceSegments: [] })} className="text-xs text-red-500 hover:text-red-700">Clear all</button>
                       )}
                     </div>
                   </div>
@@ -655,16 +593,7 @@ export const BrandTargetingSection = memo(function BrandTargetingSection({
                                   </div>
                                 )}
                               </div>
-                              <div className="flex items-center gap-2 shrink-0">
-                                <div className="text-right">
-                                  <div className="relative">
-                                    <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[10px] text-gray-400">$</span>
-                                    <input type="text" inputMode="decimal" value={seg.bid.toFixed(2)} onChange={(e) => { const v = parseFloat(e.target.value); if (!isNaN(v)) updateBrandSegmentBid(seg.id, v); }} className="w-16 pl-4 pr-1 py-1 border rounded text-xs text-right" />
-                                  </div>
-                                  <span className="text-[9px] text-gray-400">{seg.bidRange.min.toFixed(2)}-{seg.bidRange.max.toFixed(2)}</span>
-                                </div>
-                                <button onClick={() => removeBrandSegment(seg.id)} className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"><Trash2 className="w-3.5 h-3.5" /></button>
-                              </div>
+                              <button onClick={() => removeBrandSegment(seg.id)} className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded shrink-0"><Trash2 className="w-3.5 h-3.5" /></button>
                             </div>
                           </div>
                         ))}
@@ -691,7 +620,6 @@ export const BrandTargetingSection = memo(function BrandTargetingSection({
                 {[
                   { value: "all", label: "All Slots", desc: "Target all available placements" },
                   { value: "include", label: "Include Only", desc: "Target specific slots only" },
-                  { value: "exclude", label: "Exclude", desc: "Target all except selected" },
                 ].map(mode => (
                   <button
                     key={mode.value}
@@ -885,31 +813,15 @@ export const BrandTargetingSection = memo(function BrandTargetingSection({
                     </div>
                   </div>
                   
-                  {/* Right: Selected/Excluded Zones */}
-                  <div className={cn(
-                    "col-span-5 border rounded-lg overflow-hidden",
-                    slotTargetingMode === "include" ? "border-primary-200" : "border-red-200"
-                  )}>
-                    <div className={cn(
-                      "px-3 py-2 border-b flex items-center justify-between",
-                      slotTargetingMode === "include" ? "bg-primary-50" : "bg-red-50"
-                    )}>
-                      <span className={cn(
-                        "text-xs font-medium",
-                        slotTargetingMode === "include" ? "text-primary-700" : "text-red-700"
-                      )}>
-                        {slotTargetingMode === "include" ? "Included Zones" : "Excluded Zones"}
-                      </span>
-                      {((slotTargetingMode === "include" && draft.slotIds.length > 0) || 
-                        (slotTargetingMode === "exclude" && draft.excludedSlotIds.length > 0)) && (
+                  {/* Right: Selected Zones */}
+                  <div className="col-span-5 border rounded-lg overflow-hidden border-primary-200">
+                    <div className="px-3 py-2 border-b flex items-center justify-between bg-primary-50">
+                      <span className="text-xs font-medium text-primary-700">Included Zones</span>
+                      {draft.slotIds.length > 0 && (
                         <button
                           onClick={() => {
-                            if (slotTargetingMode === "include") {
-                              updateDraft({ slotIds: [] });
-                              onSlotGroupMultipliersChange({});
-                            } else {
-                              updateDraft({ excludedSlotIds: [] });
-                            }
+                            updateDraft({ slotIds: [] });
+                            onSlotGroupMultipliersChange({});
                           }}
                           className="text-xs text-gray-500 hover:text-red-600"
                         >
@@ -917,17 +829,13 @@ export const BrandTargetingSection = memo(function BrandTargetingSection({
                         </button>
                       )}
                     </div>
-                    <div className={cn(
-                      "overflow-y-auto p-2",
-                      slotTargetingMode === "include" ? "max-h-72" : "max-h-48"
-                    )}>
-                      {((slotTargetingMode === "include" && draft.slotIds.length === 0) || 
-                        (slotTargetingMode === "exclude" && draft.excludedSlotIds.length === 0)) ? (
+                    <div className="overflow-y-auto p-2 max-h-72">
+                      {draft.slotIds.length === 0 ? (
                         <div className="text-center py-6 text-gray-400 text-xs">
                           <Layers className="w-6 h-6 mx-auto mb-2 opacity-50" />
-                          No zones {slotTargetingMode === "include" ? "selected" : "excluded"}
+                          No zones selected
                         </div>
-                      ) : slotTargetingMode === "include" ? (
+                      ) : (
                         /* Include mode: group by page with per-group multiplier */
                         <div className="space-y-3">
                           {(() => {
@@ -951,142 +859,73 @@ export const BrandTargetingSection = memo(function BrandTargetingSection({
                             
                             return Object.entries(groupedByPage).map(([pageId, { page, zones, totalViews }]) => {
                               const zoneCount = Object.keys(zones).length;
-                              // Recommended multiplier: higher for premium/low-inventory pages, lower for high-traffic
-                              const recommended = totalViews > 5000000 ? 5 : totalViews > 1000000 ? 10 : totalViews > 500000 ? 15 : 25;
-                              const currentMultiplier = slotGroupMultipliers[pageId] ?? String(recommended);
                               
                               return (
                                 <div key={pageId} className="bg-primary-50 rounded-lg overflow-hidden border border-primary-200">
-                                  {/* Page header with multiplier */}
-                                  <div className="px-3 py-2 flex items-center justify-between gap-2">
-                                    <div className="flex-1 min-w-0">
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-xs font-semibold text-gray-900 truncate">{page.name}</span>
-                                        <span className="text-[10px] text-gray-400 shrink-0">{zoneCount} zone{zoneCount !== 1 ? "s" : ""}</span>
-                                      </div>
-                                      <span className="text-[10px] text-gray-400">
-                                        {totalViews >= 1000000 ? `${(totalViews / 1000000).toFixed(1)}M` : `${Math.round(totalViews / 1000)}K`} views/day
-                                      </span>
-                                    </div>
-                                    <div className="flex flex-col items-end gap-0.5 shrink-0">
-                                      <div className="relative">
-                                        <input
-                                          type="text"
-                                          inputMode="decimal"
-                                          value={currentMultiplier}
-                                          onChange={(e) => {
-                                            onSlotGroupMultipliersChange({
-                                              ...slotGroupMultipliers,
-                                              [pageId]: e.target.value,
-                                            });
-                                          }}
-                                          className="w-14 px-1.5 py-1 border border-amber-300 rounded text-xs text-right pr-4 bg-white focus:outline-none focus:ring-1 focus:ring-amber-400"
-                                        />
-                                        <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-amber-600 text-[10px]">%</span>
-                                      </div>
-                                      <span className="text-[9px] text-amber-600">Rec: {recommended}%</span>
+                                  {/* Page header */}
+                                  <div className="px-3 py-1.5 flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs font-semibold text-gray-900 truncate">{page.name}</span>
+                                      <span className="text-[10px] text-gray-400 shrink-0">{zoneCount} zone{zoneCount !== 1 ? "s" : ""}</span>
                                     </div>
                                   </div>
-                                  {/* Zone list */}
+                                  {/* Zone list with per-zone multiplier */}
                                   <div className="border-t border-primary-200">
-                                    {Object.entries(zones).map(([zoneName, zoneSlotIds]) => (
-                                      <div key={zoneName} className="px-3 py-1 flex items-center justify-between text-[11px] border-b last:border-b-0 border-primary-100">
-                                        <span className="text-gray-600 truncate">{zoneName}</span>
-                                        <button
-                                          onClick={() => {
-                                            const newSlotIds = draft.slotIds.filter(i => !zoneSlotIds.includes(i));
-                                            updateDraft({ slotIds: newSlotIds });
-                                            // If page has no more slots, remove its multiplier
-                                            const remainingSlotsForPage = slots.filter(s => s.pageId === pageId && newSlotIds.includes(s.id));
-                                            if (remainingSlotsForPage.length === 0) {
+                                    {Object.entries(zones).map(([zoneName, zoneSlotIds]) => {
+                                      const zoneKey = `${pageId}::${zoneName}`;
+                                      const zoneViews = slots.filter(s => zoneSlotIds.includes(s.id)).reduce((sum, s) => sum + s.avgDailyViews, 0);
+                                      const recommended = zoneViews > 5000000 ? 5 : zoneViews > 1000000 ? 10 : zoneViews > 500000 ? 15 : 25;
+                                      const currentMultiplier = slotGroupMultipliers[zoneKey] ?? String(recommended);
+                                      
+                                      return (
+                                        <div key={zoneName} className="px-3 py-1.5 flex items-center gap-2 text-[11px] border-b last:border-b-0 border-primary-100">
+                                          <span className="text-gray-700 truncate flex-1 font-medium">{zoneName}</span>
+                                          <span className="text-[10px] text-gray-400 shrink-0">
+                                            {zoneViews >= 1000000 ? `${(zoneViews / 1000000).toFixed(1)}M` : `${Math.round(zoneViews / 1000)}K`}
+                                          </span>
+                                          <div className="flex items-center gap-0.5 shrink-0">
+                                            <span className="text-[9px] text-amber-600">+</span>
+                                            <div className="relative">
+                                              <input
+                                                type="text"
+                                                inputMode="decimal"
+                                                value={currentMultiplier}
+                                                onChange={(e) => {
+                                                  onSlotGroupMultipliersChange({
+                                                    ...slotGroupMultipliers,
+                                                    [zoneKey]: e.target.value,
+                                                  });
+                                                }}
+                                                className="w-10 px-1 py-0.5 border border-amber-300 rounded text-[10px] text-right pr-3 bg-white focus:outline-none focus:ring-1 focus:ring-amber-400"
+                                              />
+                                              <span className="absolute right-1 top-1/2 -translate-y-1/2 text-amber-600 text-[9px]">%</span>
+                                            </div>
+                                          </div>
+                                          <button
+                                            onClick={() => {
+                                              const newSlotIds = draft.slotIds.filter(i => !zoneSlotIds.includes(i));
+                                              updateDraft({ slotIds: newSlotIds });
                                               const newMultipliers = { ...slotGroupMultipliers };
-                                              delete newMultipliers[pageId];
+                                              delete newMultipliers[zoneKey];
+                                              if (Object.keys(newMultipliers).filter(k => k.startsWith(`${pageId}::`)).length === 0) {
+                                                // no more zones for this page
+                                              }
                                               onSlotGroupMultipliersChange(newMultipliers);
-                                            }
-                                          }}
-                                          className="ml-2 text-gray-400 hover:text-red-600 shrink-0"
-                                        >
-                                          ×
-                                        </button>
-                                      </div>
-                                    ))}
+                                            }}
+                                            className="text-gray-400 hover:text-red-600 shrink-0"
+                                          >
+                                            ×
+                                          </button>
+                                        </div>
+                                      );
+                                    })}
                                   </div>
                                 </div>
                               );
                             });
                           })()}
                         </div>
-                      ) : (
-                        /* Exclude mode: flat list as before */
-                        <div className="space-y-1">
-                          {(() => {
-                            const selectedIds = draft.excludedSlotIds;
-                            const selectedSlots = slots.filter(s => selectedIds.includes(s.id));
-                            const groupedByPageZone: Record<string, { page: typeof pages[0]; zone: string; slotIds: string[] }> = {};
-                            
-                            selectedSlots.forEach(slot => {
-                              const page = pages.find(p => p.id === slot.pageId);
-                              const key = `${slot.pageId}-${slot.zone || slot.name}`;
-                              if (!groupedByPageZone[key]) {
-                                groupedByPageZone[key] = { page: page!, zone: slot.zone || slot.name, slotIds: [] };
-                              }
-                              groupedByPageZone[key].slotIds.push(slot.id);
-                            });
-                            
-                            return Object.entries(groupedByPageZone).map(([key, { page, zone, slotIds }]) => (
-                              <div 
-                                key={key}
-                                className="flex items-center justify-between px-2 py-1.5 rounded text-xs bg-red-100"
-                              >
-                                <div className="truncate flex-1">
-                                  <span className="text-gray-500">{page?.name}:</span> {zone}
-                                </div>
-                                <button
-                                  onClick={() => {
-                                    updateDraft({ excludedSlotIds: draft.excludedSlotIds.filter(i => !slotIds.includes(i)) });
-                                  }}
-                                  className="ml-2 text-gray-400 hover:text-red-600"
-                                >
-                                  ×
-                                </button>
-                              </div>
-                            ));
-                          })()}
-                        </div>
                       )}
-                    </div>
-                  </div>
-                </div>
-              )}
-              
-              {/* Slot Multiplier - only for exclude mode (include mode has per-group multipliers above) */}
-              {slotTargetingMode === "exclude" && draft.excludedSlotIds.length > 0 && (
-                <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
-                  <div className="flex items-start gap-3">
-                    <div className="flex-1">
-                      <h4 className="text-sm font-medium text-amber-900 mb-1">Slot Multiplier</h4>
-                      <p className="text-xs text-amber-700 mb-3">
-                        {`Excluding ${draft.excludedSlotIds.length} slot${draft.excludedSlotIds.length !== 1 ? "s" : ""} may benefit from a bid adjustment`}
-                      </p>
-                      <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm text-amber-800">Add</span>
-                          <div className="relative">
-                            <input
-                              type="text"
-                              inputMode="decimal"
-                              value={slotMultiplier}
-                              onChange={(e) => onSlotMultiplierChange(e.target.value)}
-                              className="w-16 px-2 py-1.5 border border-amber-300 rounded-lg text-sm text-right pr-6 bg-white"
-                            />
-                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-amber-600 text-sm">%</span>
-                          </div>
-                          <span className="text-sm text-amber-800">to all target bids</span>
-                        </div>
-                        <div className="text-xs text-amber-600 bg-amber-100 px-2 py-1 rounded">
-                          Recommended: {recommendedSlotMultiplier}%
-                        </div>
-                      </div>
                     </div>
                   </div>
                 </div>

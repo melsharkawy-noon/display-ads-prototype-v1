@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { SinglePageFlow } from "@/components/SinglePageFlow";
 import { CalendarOverview } from "@/components/CalendarOverview";
 import { BookingsListPage } from "@/components/BookingsListPage";
@@ -14,13 +14,16 @@ import { PlusCircle, Calendar, LayoutGrid, BookOpen } from "lucide-react";
 type Tab = "builder" | "calendar" | "bookings";
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<Tab>("builder");
+  const [mounted, setMounted] = useState(false);
+  const [activeTab, setActiveTab] = useState<Tab>("bookings");
   const [showBookingDetail, setShowBookingDetail] = useState(false);
   const [brandPreviewOpen, setBrandPreviewOpen] = useState(false);
   const [autoExpandBookingId, setAutoExpandBookingId] = useState<string | null>(null);
   const [highlightCampaignId, setHighlightCampaignId] = useState<string | null>(null);
   const { intake, bookings, selectBooking, createBooking, addCampaignToBooking } = useIntake();
   const { draft, updateDraft, resetDraft } = useCampaign();
+
+  useEffect(() => { setMounted(true); }, []);
 
   const handleOpenBooking = useCallback(
     (id: string) => {
@@ -94,10 +97,12 @@ export default function Home() {
   }, [draft, addCampaignToBooking]);
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
-    { id: "builder", label: "Campaign Builder", icon: <PlusCircle className="w-4 h-4" /> },
-    { id: "calendar", label: "Calendar Overview", icon: <Calendar className="w-4 h-4" /> },
     { id: "bookings", label: "Bookings", icon: <BookOpen className="w-4 h-4" /> },
+    { id: "calendar", label: "Calendar Overview", icon: <Calendar className="w-4 h-4" /> },
+    { id: "builder", label: "Campaign Builder", icon: <PlusCircle className="w-4 h-4" /> },
   ];
+
+  if (!mounted) return <div className="min-h-screen bg-gray-50" />;
 
   return (
     <div className="min-h-screen bg-gray-50">

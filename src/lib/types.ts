@@ -5,9 +5,26 @@ export type OwnerType = "self_serve" | "ops_managed";
 export type LandingPageMode = "external_url" | "direct_url" | "builder";
 export type BudgetType = "daily" | "total";
 export type Marketplace = "noon" | "supermall";
+export type AdType = "banner" | "interstitial" | "video_popup";
 
 // Slot types with their dimensions per country
 export type SlotType = "mobile_hero" | "mobile_slim" | "desktop_hero" | "desktop_slim";
+
+// Fixed slots for non-banner ad types
+export const INTERSTITIAL_SLOT_ID = "slot-interstitial";
+export const VIDEO_POPUP_SLOT_ID = "slot-video-popup";
+
+export const INTERSTITIAL_DIMENSIONS = [
+  "1080x1080",
+  "1080x1350",
+  "1080x1440",
+  "1080x1920",
+] as const;
+
+export const VIDEO_POPUP_DIMENSIONS = [
+  "1080x1920",
+  "1920x1080",
+] as const;
 
 export interface SlotDimensions {
   type: SlotType;
@@ -139,6 +156,7 @@ export interface CampaignDraft {
   ownerType: OwnerType;
   campaignType: CampaignType;
   pricingModel: PricingModel;
+  adType: AdType;
   
   // Location
   country: string;
@@ -704,6 +722,7 @@ export const initialDraft: CampaignDraft = {
   ownerType: "ops_managed",
   campaignType: "internal",
   pricingModel: "cpm",
+  adType: "banner",
   country: "AE",
   marketplace: "noon",
   pageIds: [],

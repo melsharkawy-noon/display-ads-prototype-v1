@@ -510,6 +510,36 @@ export const slots: Slot[] = [
   ...generateCLPSlots("books_clp", "Books & Media", 200000, 55),
   ...generateCLPSlots("office_clp", "Office Supplies", 250000, 60),
   ...generateCLPSlots("health_clp", "Health & Wellness", 400000, 75),
+
+  // Fixed slots for non-banner ad types
+  {
+    id: "slot-interstitial",
+    name: "Interstitial Popup",
+    zone: "Interstitial",
+    pageId: "fullscreen",
+    slotType: "mobile_hero" as SlotType,
+    dimensions: "1080x1920",
+    position: "Full Screen",
+    avgDailyViews: 2500000,
+    cptRateUsd: 0,
+    minCpmUsd: 4,
+    supportedFormats: ["image/png", "image/jpeg"],
+    maxFileSizeMb: 5,
+  },
+  {
+    id: "slot-video-popup",
+    name: "Video Popup",
+    zone: "Video Popup",
+    pageId: "fullscreen",
+    slotType: "mobile_hero" as SlotType,
+    dimensions: "1080x1920",
+    position: "Full Screen",
+    avgDailyViews: 1800000,
+    cptRateUsd: 0,
+    minCpmUsd: 6,
+    supportedFormats: ["video/mp4"],
+    maxFileSizeMb: 50,
+  },
 ];
 
 // Booked time slots for CPT availability (mock)

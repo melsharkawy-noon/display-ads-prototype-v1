@@ -4,7 +4,7 @@ import { useState, memo } from "react";
 import { useCampaign } from "@/context/CampaignContext";
 import { Card, CardContent } from "@/components/ui/Card";
 import { cn } from "@/lib/utils";
-import { SLOT_DIMENSIONS, SlotType, Creative } from "@/lib/types";
+import { SLOT_DIMENSIONS, SlotType, Creative, INTERSTITIAL_DIMENSIONS, VIDEO_POPUP_DIMENSIONS } from "@/lib/types";
 import { slots } from "@/lib/mock-data";
 import {
   CheckCircle,
@@ -18,6 +18,12 @@ import {
   Loader2,
   RefreshCw,
   Upload,
+  Film,
+  Monitor,
+  Play,
+  ChevronLeft,
+  ChevronRight,
+  ImageIcon,
 } from "lucide-react";
 
 interface CreativesSectionProps {
@@ -195,6 +201,474 @@ export const CreativesSection = memo(function CreativesSection({
       </div>
     );
   };
+
+  const isNonBanner = draft.adType === "interstitial" || draft.adType === "video_popup";
+  const isInterstitial = draft.adType === "interstitial";
+  const isVideoPopup = draft.adType === "video_popup";
+  const allowedDimensions = isInterstitial ? INTERSTITIAL_DIMENSIONS : isVideoPopup ? VIDEO_POPUP_DIMENSIONS : [];
+  const mediaLabel = isVideoPopup ? "video" : "image";
+
+  // Video Popup thumbnails — keyed by creative id
+  const [videoThumbnails, setVideoThumbnails] = useState<Record<string, { url: string; fileName: string; dimensions: string }>>({});
+
+  // Preview state for non-banner
+  const [previewLang, setPreviewLang] = useState<"en" | "ar">("en");
+  const [previewIndex, setPreviewIndex] = useState(0);
+  const [previewPlaying, setPreviewPlaying] = useState(false);
+
+  const handleNonBannerUpload = (dimension: string, language: "en" | "ar") => {
+    const [w, h] = dimension.split("x");
+    const newCreative: Creative = {
+      id: `creative_${Date.now()}_${language}`,
+      slotType: "mobile_hero",
+      platform: "mobile",
+      language,
+      format: isVideoPopup ? "video/mp4" : "image/png",
+      assetUrl: isVideoPopup
+        ? `https://example.com/mock-video-${w}x${h}.mp4`
+        : `https://picsum.photos/seed/${Date.now()}/${w}/${h}`,
+      fileName: isVideoPopup
+        ? `video_popup_${dimension}_${language}.mp4`
+        : `interstitial_${dimension}_${language}.png`,
+      dimensions: dimension,
+    };
+    updateDraft({ creatives: [...draft.creatives, newCreative] });
+  };
+
+  const handleThumbnailUpload = (creativeId: string, videoDimensions: string) => {
+    const [w, h] = videoDimensions.split("x");
+    setVideoThumbnails(prev => ({
+      ...prev,
+      [creativeId]: {
+        url: `https://picsum.photos/seed/thumb_${Date.now()}/${w}/${h}`,
+        fileName: `thumbnail_${videoDimensions}.jpg`,
+        dimensions: videoDimensions,
+      },
+    }));
+  };
+
+  const removeThumbnail = (creativeId: string) => {
+    setVideoThumbnails(prev => {
+      const next = { ...prev };
+      delete next[creativeId];
+      return next;
+    });
+  };
+
+  if (isNonBanner) {
+    const allCreatives = draft.creatives;
+    const enCreatives = allCreatives.filter(c => c.language === "en");
+    const arCreatives = allCreatives.filter(c => c.language === "ar");
+    const hasEn = enCreatives.length > 0;
+    const hasAr = arCreatives.length > 0;
+    const hasCreatives = hasEn || hasAr;
+
+    // Interstitial: locked dimension from first creative
+    const lockedDimension = isInterstitial && allCreatives.length > 0 ? allCreatives[0].dimensions : null;
+
+    // Video Popup: check thumbnails completeness
+    const videosMissingThumbnails = isVideoPopup
+      ? allCreatives.filter(c => !videoThumbnails[c.id])
+      : [];
+
+    const isComplete = isVideoPopup
+      ? hasCreatives && videosMissingThumbnails.length === 0
+      : hasCreatives;
+
+    // Preview helpers
+    const previewCreatives = previewLang === "en" ? enCreatives : arCreatives;
+    const safePreviewIndex = Math.min(previewIndex, Math.max(0, previewCreatives.length - 1));
+    const currentPreview = previewCreatives[safePreviewIndex] || null;
+
+    return (
+      <section ref={sectionRef} id="creatives" className="scroll-mt-36">
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Creative Assets</h2>
+                <p className="text-sm text-gray-500">
+                  Upload {mediaLabel} creatives for the {isInterstitial ? "Interstitial Popup" : "Video Popup"} ad format
+                </p>
+              </div>
+              {isComplete ? (
+                <span className="flex items-center gap-1.5 px-2.5 py-1 bg-green-100 text-green-700 text-xs font-medium rounded-full">
+                  <CheckCircle className="w-3 h-3" />
+                  {hasEn && hasAr ? "Both languages" : hasEn ? "English only" : "Arabic only"}
+                </span>
+              ) : videosMissingThumbnails.length > 0 ? (
+                <span className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-100 text-amber-700 text-xs font-medium rounded-full">
+                  <AlertCircle className="w-3 h-3" />
+                  {videosMissingThumbnails.length} thumbnail{videosMissingThumbnails.length !== 1 ? "s" : ""} missing
+                </span>
+              ) : (
+                <span className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-100 text-amber-700 text-xs font-medium rounded-full">
+                  <AlertCircle className="w-3 h-3" />
+                  No creatives
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-12 gap-6">
+              {/* Left: Upload area */}
+              <div className="col-span-7">
+                {/* Format info */}
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 mb-5">
+                  <div className="flex items-center gap-3 mb-3">
+                    {isVideoPopup ? <Film className="w-5 h-5 text-purple-500" /> : <Monitor className="w-5 h-5 text-blue-500" />}
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900">{isInterstitial ? "Interstitial Popup" : "Video Popup"}</p>
+                      <p className="text-xs text-gray-500">
+                        {isInterstitial
+                          ? `Full-screen image — ${lockedDimension ? `Locked to ${lockedDimension}` : `Choose from: ${[...allowedDimensions].join(", ")}`}`
+                          : `Full-screen video + thumbnail — Allowed: ${[...allowedDimensions].join(", ")}`}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {(isInterstitial && lockedDimension
+                      ? [lockedDimension]
+                      : [...allowedDimensions]
+                    ).map(d => (
+                      <span key={d} className={cn(
+                        "px-2.5 py-1 border rounded-md text-xs font-mono",
+                        lockedDimension === d ? "bg-primary-50 border-primary-300 text-primary-700" : "bg-white border-gray-200 text-gray-700"
+                      )}>
+                        {d}{lockedDimension === d && " ✓"}
+                      </span>
+                    ))}
+                  </div>
+                  {isInterstitial && lockedDimension && (
+                    <p className="text-[11px] text-primary-600 mt-2 flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" />
+                      All creatives must match {lockedDimension} (set by first upload)
+                    </p>
+                  )}
+                </div>
+
+                {/* Upload by language */}
+                {(["en", "ar"] as const).map(lang => {
+                  const langLabel = lang === "en" ? "English" : "Arabic";
+                  const langCreatives = draft.creatives.filter(c => c.language === lang);
+                  const uploadDimensions = isInterstitial
+                    ? (lockedDimension ? [lockedDimension] : [...allowedDimensions])
+                    : [...allowedDimensions];
+
+                  return (
+                    <div key={lang} className="mb-5">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <span className={cn(
+                            "text-xs font-bold px-2 py-0.5 rounded",
+                            lang === "en" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"
+                          )}>{lang.toUpperCase()}</span>
+                          <span className="text-sm font-medium text-gray-700">{langLabel} Creative{isInterstitial ? "s" : ""}</span>
+                          {langCreatives.length === 0 && (
+                            <span className="text-xs text-gray-400">(optional)</span>
+                          )}
+                        </div>
+                        {langCreatives.length > 0 && (
+                          <span className="text-xs text-gray-500">{langCreatives.length} file{langCreatives.length !== 1 ? "s" : ""}</span>
+                        )}
+                      </div>
+
+                      {/* Existing creatives */}
+                      {langCreatives.length > 0 && (
+                        <div className="space-y-2 mb-3">
+                          {langCreatives.map(c => (
+                            <div key={c.id} className="rounded-lg border border-gray-200 overflow-hidden">
+                              <div className="flex items-center gap-3 p-3 bg-white">
+                                <div className={cn(
+                                  "w-10 h-10 rounded flex items-center justify-center flex-shrink-0",
+                                  isVideoPopup ? "bg-purple-50" : "bg-blue-50"
+                                )}>
+                                  {isVideoPopup
+                                    ? <Film className="w-5 h-5 text-purple-500" />
+                                    : <Image className="w-5 h-5 text-blue-500" />}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-gray-800 truncate">{c.fileName}</p>
+                                  <p className="text-xs text-gray-400">{c.dimensions} &middot; {isVideoPopup ? "MP4 Video" : "PNG Image"}</p>
+                                </div>
+                                <button
+                                  onClick={() => {
+                                    removeCreative(c.id);
+                                    if (isVideoPopup) removeThumbnail(c.id);
+                                  }}
+                                  className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+
+                              {/* Video Popup: Thumbnail section */}
+                              {isVideoPopup && (
+                                <div className="px-3 pb-3 pt-0">
+                                  <div className="ml-[52px]">
+                                    {videoThumbnails[c.id] ? (
+                                      <div className="flex items-center gap-2 p-2 bg-green-50 border border-green-200 rounded-lg">
+                                        <ImageIcon className="w-4 h-4 text-green-600 flex-shrink-0" />
+                                        <div className="flex-1 min-w-0">
+                                          <p className="text-xs font-medium text-green-800 truncate">{videoThumbnails[c.id].fileName}</p>
+                                          <p className="text-[10px] text-green-600">{videoThumbnails[c.id].dimensions} thumbnail</p>
+                                        </div>
+                                        <button
+                                          onClick={() => removeThumbnail(c.id)}
+                                          className="p-1 text-green-500 hover:text-red-500 rounded transition-colors"
+                                        >
+                                          <Trash2 className="w-3 h-3" />
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <button
+                                        onClick={() => handleThumbnailUpload(c.id, c.dimensions)}
+                                        className="w-full flex items-center gap-2 p-2 border-2 border-dashed border-amber-300 rounded-lg hover:border-amber-400 hover:bg-amber-50/50 transition-all group"
+                                      >
+                                        <ImageIcon className="w-4 h-4 text-amber-400 group-hover:text-amber-500" />
+                                        <div className="text-left">
+                                          <p className="text-xs font-medium text-amber-700">Upload {c.dimensions} thumbnail</p>
+                                          <p className="text-[10px] text-amber-500">Required — must match video dimensions</p>
+                                        </div>
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Upload buttons for additional creatives */}
+                      {(isInterstitial || langCreatives.length === 0) && (
+                        <div className="space-y-2">
+                          {uploadDimensions
+                            .filter(dim => {
+                              if (!isInterstitial) return langCreatives.length === 0;
+                              return true;
+                            })
+                            .map(dim => (
+                              <button
+                                key={dim}
+                                onClick={() => handleNonBannerUpload(dim, lang)}
+                                className="w-full flex items-center gap-3 p-3 border-2 border-dashed border-gray-200 rounded-lg hover:border-primary-300 hover:bg-primary-50/30 transition-all group"
+                              >
+                                <div className="w-8 h-8 rounded-md bg-gray-100 group-hover:bg-primary-100 flex items-center justify-center transition-colors">
+                                  <Upload className="w-4 h-4 text-gray-400 group-hover:text-primary-500" />
+                                </div>
+                                <div className="text-left">
+                                  <p className="text-sm font-medium text-gray-700 group-hover:text-primary-700">
+                                    {langCreatives.length > 0 ? "Add another" : "Upload"} {dim} {mediaLabel}
+                                  </p>
+                                  <p className="text-xs text-gray-400">
+                                    {isVideoPopup ? "MP4 format" : "PNG or JPG format"}
+                                  </p>
+                                </div>
+                              </button>
+                            ))}
+                        </div>
+                      )}
+
+                      {/* Video Popup — single creative per language, show button only if none */}
+                      {isVideoPopup && langCreatives.length > 0 && (
+                        <div className="mt-2">
+                          {[...allowedDimensions].filter(d => !langCreatives.some(c => c.dimensions === d)).map(dim => (
+                            <button
+                              key={dim}
+                              onClick={() => handleNonBannerUpload(dim, lang)}
+                              className="w-full flex items-center gap-3 p-2.5 border-2 border-dashed border-gray-200 rounded-lg hover:border-primary-300 hover:bg-primary-50/30 transition-all group mt-2"
+                            >
+                              <Upload className="w-4 h-4 text-gray-400 group-hover:text-primary-500" />
+                              <span className="text-xs font-medium text-gray-600 group-hover:text-primary-700">Add {dim} video</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {/* Reminder */}
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />
+                    <p className="text-xs text-amber-700">
+                      {isVideoPopup
+                        ? "At least one language is required. Each video must include a thumbnail image with matching dimensions."
+                        : "At least one language is required. All creatives must use the same dimensions as the first upload."}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right: Preview panel */}
+              <div className="col-span-5">
+                <div className="sticky top-28">
+                  <div className="border rounded-xl overflow-hidden bg-gradient-to-b from-gray-50 to-gray-100 shadow-sm">
+                    <div className="px-4 py-3 bg-white border-b">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-semibold text-gray-800">Creative Preview</span>
+                        {isInterstitial && previewCreatives.length > 1 && (
+                          <span className="text-xs text-gray-500">{safePreviewIndex + 1} / {previewCreatives.length}</span>
+                        )}
+                      </div>
+                      {/* Language toggle */}
+                      <div className="flex gap-1 bg-gray-100 rounded-lg p-0.5">
+                        {(["en", "ar"] as const).map(l => (
+                          <button
+                            key={l}
+                            onClick={() => { setPreviewLang(l); setPreviewIndex(0); setPreviewPlaying(false); }}
+                            className={cn(
+                              "flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-all",
+                              previewLang === l
+                                ? "bg-white text-gray-900 shadow-sm"
+                                : "text-gray-500 hover:text-gray-700"
+                            )}
+                          >
+                            {l === "en" ? "🇬🇧 English" : "🇸🇦 Arabic"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="p-4">
+                      {currentPreview ? (
+                        <div className="space-y-3">
+                          {/* Mobile-style frame */}
+                          <div className="mx-auto max-w-[220px]">
+                            <div className="bg-gray-900 rounded-[2rem] p-1.5 shadow-2xl">
+                              <div className="bg-white rounded-[1.5rem] overflow-hidden">
+                                {/* Notch */}
+                                <div className="h-5 bg-white flex items-center justify-center relative">
+                                  <div className="absolute w-20 h-5 bg-gray-900 rounded-b-xl flex items-center justify-center">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-gray-700" />
+                                  </div>
+                                </div>
+
+                                {/* Ad content */}
+                                <div className="relative bg-gray-100">
+                                  {isInterstitial ? (
+                                    // Interstitial: show image
+                                    <img
+                                      src={currentPreview.assetUrl || ""}
+                                      alt="Interstitial preview"
+                                      className="w-full"
+                                      style={{ aspectRatio: currentPreview.dimensions.replace("x", "/") }}
+                                    />
+                                  ) : (
+                                    // Video Popup: show thumbnail or play state
+                                    <div
+                                      className="relative cursor-pointer"
+                                      onClick={() => setPreviewPlaying(!previewPlaying)}
+                                      style={{ aspectRatio: currentPreview.dimensions.replace("x", "/") }}
+                                    >
+                                      {previewPlaying ? (
+                                        <div className="w-full h-full bg-gray-900 flex items-center justify-center">
+                                          <div className="text-center">
+                                            <Film className="w-8 h-8 text-white/60 mx-auto mb-1" />
+                                            <p className="text-[10px] text-white/50">Video playing (mock)</p>
+                                          </div>
+                                        </div>
+                                      ) : videoThumbnails[currentPreview.id] ? (
+                                        <>
+                                          <img
+                                            src={videoThumbnails[currentPreview.id].url}
+                                            alt="Thumbnail"
+                                            className="w-full h-full object-cover"
+                                          />
+                                          <div className="absolute inset-0 flex items-center justify-center">
+                                            <div className="w-10 h-10 rounded-full bg-black/50 flex items-center justify-center backdrop-blur-sm">
+                                              <Play className="w-5 h-5 text-white ml-0.5" />
+                                            </div>
+                                          </div>
+                                        </>
+                                      ) : (
+                                        <div className="w-full h-full bg-gray-200 flex items-center justify-center">
+                                          <div className="text-center">
+                                            <Film className="w-6 h-6 text-gray-400 mx-auto mb-1" />
+                                            <p className="text-[10px] text-gray-400">No thumbnail</p>
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                  <span className="absolute top-1.5 right-1.5 text-[7px] px-1 py-0.5 bg-black/60 text-white rounded font-medium">Ad</span>
+                                </div>
+
+                                {/* Bottom bar */}
+                                <div className="h-4 flex items-center justify-center">
+                                  <div className="w-1/3 h-1 bg-gray-300 rounded-full" />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Navigation for multiple interstitial creatives */}
+                          {isInterstitial && previewCreatives.length > 1 && (
+                            <div className="flex items-center justify-center gap-3">
+                              <button
+                                onClick={() => { setPreviewIndex(Math.max(0, safePreviewIndex - 1)); }}
+                                disabled={safePreviewIndex === 0}
+                                className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                              >
+                                <ChevronLeft className="w-4 h-4 text-gray-600" />
+                              </button>
+                              <div className="flex gap-1.5">
+                                {previewCreatives.map((_, i) => (
+                                  <button
+                                    key={i}
+                                    onClick={() => setPreviewIndex(i)}
+                                    className={cn(
+                                      "w-2 h-2 rounded-full transition-all",
+                                      i === safePreviewIndex ? "bg-primary-500 scale-125" : "bg-gray-300 hover:bg-gray-400"
+                                    )}
+                                  />
+                                ))}
+                              </div>
+                              <button
+                                onClick={() => { setPreviewIndex(Math.min(previewCreatives.length - 1, safePreviewIndex + 1)); }}
+                                disabled={safePreviewIndex >= previewCreatives.length - 1}
+                                className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                              >
+                                <ChevronRight className="w-4 h-4 text-gray-600" />
+                              </button>
+                            </div>
+                          )}
+
+                          {/* Creative info */}
+                          <div className="text-center pt-2 border-t">
+                            <p className="text-sm font-medium text-gray-800">
+                              {isInterstitial ? "Interstitial Popup" : "Video Popup"}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                              {currentPreview.language === "en" ? "English" : "العربية"} &middot; {currentPreview.dimensions}
+                              {isVideoPopup && videoThumbnails[currentPreview.id] && " &middot; Thumbnail ✓"}
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="h-56 flex items-center justify-center">
+                          <div className="text-center">
+                            <div className="w-14 h-14 rounded-full bg-gray-200 flex items-center justify-center mx-auto mb-3">
+                              {isVideoPopup ? <Film className="w-6 h-6 text-gray-400" /> : <Image className="w-6 h-6 text-gray-400" />}
+                            </div>
+                            <p className="text-sm font-medium text-gray-600">No preview available</p>
+                            <p className="text-xs text-gray-400 mt-1">
+                              Upload a {previewLang === "en" ? "English" : "Arabic"} creative to preview
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </section>
+    );
+  }
 
   return (
     <section

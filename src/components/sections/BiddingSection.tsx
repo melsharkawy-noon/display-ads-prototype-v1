@@ -80,7 +80,24 @@ const BiddingSection = memo(function BiddingSection({
     const bid = parseFloat(localBid) || draft.bidAmount || 5;
     const budget = parseFloat(localBudget) || draft.budget || 0;
     const expectedViews = bid > 0 ? Math.round((budget / bid) * 1000) : 0;
-    const availableViews = estimateAvailableViews(audienceCount, hasCompound, slotTargetingMode, slotCount);
+
+    let availableViews: number;
+    if (draft.adType === "interstitial") {
+      // Fixed slot — 2.5M base, reduced by audience targeting
+      let base = 2_500_000;
+      if (audienceCount > 0) base *= Math.max(0.05, 1 - audienceCount * 0.2);
+      if (hasCompound) base *= 0.55;
+      availableViews = Math.round(base);
+    } else if (draft.adType === "video_popup") {
+      // Fixed slot — 1.8M base, reduced by audience targeting
+      let base = 1_800_000;
+      if (audienceCount > 0) base *= Math.max(0.05, 1 - audienceCount * 0.2);
+      if (hasCompound) base *= 0.55;
+      availableViews = Math.round(base);
+    } else {
+      availableViews = estimateAvailableViews(audienceCount, hasCompound, slotTargetingMode, slotCount);
+    }
+
     const recommended = getRecommendedBid(audienceCount, hasCompound);
 
     let feasibility: "comfortable" | "tight" | "insufficient";
@@ -100,7 +117,7 @@ const BiddingSection = memo(function BiddingSection({
         : "Very Niche";
 
     return { bid, budget, expectedViews, availableViews, recommended, feasibility, bidAlignment, targetingLevel };
-  }, [localBid, localBudget, draft.bidAmount, draft.budget, audienceCount, hasCompound, slotTargetingMode, slotCount]);
+  }, [localBid, localBudget, draft.bidAmount, draft.budget, audienceCount, hasCompound, slotTargetingMode, slotCount, draft.adType]);
 
   const commitBudget = () => {
     const num = parseFloat(localBudget);

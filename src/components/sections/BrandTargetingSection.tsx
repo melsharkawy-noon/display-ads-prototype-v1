@@ -605,8 +605,27 @@ export const BrandTargetingSection = memo(function BrandTargetingSection({
             </div>
           </div>
 
-          {/* 2. Slot Targeting (CPM only) */}
-          {draft.pricingModel === "cpm" && (
+          {/* Fixed slot info for non-banner ad types */}
+          {draft.pricingModel === "cpm" && draft.adType !== "banner" && (
+            <div className="mb-6 pb-6 border-b">
+              <div className="p-4 bg-primary-50 border border-primary-200 rounded-lg flex items-center gap-3">
+                <Layers className="w-5 h-5 text-primary-500 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-primary-800">
+                    Fixed Slot: {draft.adType === "interstitial" ? "Interstitial Popup" : "Video Popup"}
+                  </p>
+                  <p className="text-xs text-primary-600 mt-0.5">
+                    {draft.adType === "interstitial"
+                      ? "Full-screen image popup — no slot targeting needed"
+                      : "Full-screen video placement — no slot targeting needed"}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 2. Slot Targeting (CPM Banner only — hidden for interstitial/video_popup) */}
+          {draft.pricingModel === "cpm" && draft.adType === "banner" && (
             <div className="mb-6 pb-6 border-b">
               <div className="flex items-center justify-between mb-4">
                 <div>

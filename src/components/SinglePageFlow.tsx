@@ -27,7 +27,7 @@ import {
   products,
   bookedTimeSlots 
 } from "@/lib/mock-data";
-import { SlotType, Marketplace } from "@/lib/types";
+import { SlotType, Marketplace, AdType, INTERSTITIAL_SLOT_ID, VIDEO_POPUP_SLOT_ID, INTERSTITIAL_DIMENSIONS, VIDEO_POPUP_DIMENSIONS } from "@/lib/types";
 import {
   Building2,
   Store,
@@ -1041,11 +1041,15 @@ export function SinglePageFlow({ onCampaignSubmit }: SinglePageFlowProps) {
                       </RadioCard>
                       <RadioCard
                         selected={draft.pricingModel === "cpt"}
-                        onClick={() => updateDraft({ pricingModel: "cpt", slotIds: [], excludedSlotIds: [] })}
+                        onClick={() => {
+                          if (draft.adType !== "banner") return;
+                          updateDraft({ pricingModel: "cpt", slotIds: [], excludedSlotIds: [] });
+                        }}
                         title="CPT - Cost Per Time"
-                        description="Book specific slots by the hour. Guaranteed placement for your selected time."
+                        description={draft.adType !== "banner" ? "Not available for Interstitial / Video Popup ad types" : "Book specific slots by the hour. Guaranteed placement for your selected time."}
+                        disabled={draft.adType !== "banner"}
                       >
-                        <div className="flex items-center gap-2 mt-2 text-purple-600">
+                        <div className={cn("flex items-center gap-2 mt-2", draft.adType !== "banner" ? "text-gray-400" : "text-purple-600")}>
                           <Clock className="w-5 h-5" />
                           <span className="text-sm font-medium">Time-based</span>
                         </div>
@@ -1149,6 +1153,53 @@ export function SinglePageFlow({ onCampaignSubmit }: SinglePageFlowProps) {
                         </div>
                       </div>
                     )}
+                  </CardContent>
+                </Card>
+              </section>
+            )}
+
+            {/* Ad Type Selector — shown for CPM managed campaigns */}
+            {draft.pricingModel === "cpm" && draft.entryType === "brand" && (
+              <section className="scroll-mt-36">
+                <Card>
+                  <CardContent className="p-6">
+                    <h2 className="text-lg font-semibold text-gray-900 mb-2">Ad Type</h2>
+                    <p className="text-sm text-gray-500 mb-4">Choose the ad format for this campaign</p>
+                    <div className="grid grid-cols-3 gap-3">
+                      {([
+                        { value: "banner" as AdType, label: "Banner", desc: "Standard display banners across pages and slot groups", icon: "🖼️" },
+                        { value: "interstitial" as AdType, label: "Interstitial", desc: "Full-screen image popup (1080px wide)", icon: "📱" },
+                        { value: "video_popup" as AdType, label: "Video Popup", desc: "Full-screen video placement (portrait or landscape)", icon: "🎬" },
+                      ]).map(opt => (
+                        <button
+                          key={opt.value}
+                          onClick={() => {
+                            const updates: Partial<typeof draft> = { adType: opt.value, pricingModel: "cpm" };
+                            if (opt.value === "interstitial") {
+                              updates.slotIds = [INTERSTITIAL_SLOT_ID];
+                              updates.excludedSlotIds = [];
+                            } else if (opt.value === "video_popup") {
+                              updates.slotIds = [VIDEO_POPUP_SLOT_ID];
+                              updates.excludedSlotIds = [];
+                            } else {
+                              updates.slotIds = [];
+                              updates.excludedSlotIds = [];
+                            }
+                            updateDraft(updates);
+                          }}
+                          className={cn(
+                            "p-4 rounded-lg border-2 text-left transition-all",
+                            draft.adType === opt.value
+                              ? "border-primary-500 bg-primary-50 shadow-sm"
+                              : "border-gray-200 hover:border-gray-300"
+                          )}
+                        >
+                          <div className="text-2xl mb-2">{opt.icon}</div>
+                          <div className="text-sm font-semibold text-gray-900">{opt.label}</div>
+                          <div className="text-xs text-gray-500 mt-1">{opt.desc}</div>
+                        </button>
+                      ))}
+                    </div>
                   </CardContent>
                 </Card>
               </section>
@@ -1786,15 +1837,26 @@ export function SinglePageFlow({ onCampaignSubmit }: SinglePageFlowProps) {
                       const bid = draft.bidAmount || 5;
                       const expectedViews = bid > 0 ? Math.round((draft.budget / bid) * 1000) : 0;
 
-                      const BASE_INV = 15_000_000;
                       const aCnt = draft.audienceSegments.length;
                       const hasComp = draft.audienceSegments.some(s => s.conditions && s.conditions.length > 1);
-                      const slCnt = slotTargetingMode === "include" ? draft.slotIds.length : draft.excludedSlotIds.length;
-                      let avail = BASE_INV;
-                      if (aCnt > 0) avail *= Math.max(0.02, 1 - aCnt * 0.18);
-                      if (hasComp) avail *= 0.6;
-                      if (slotTargetingMode === "include" && slCnt > 0) avail *= Math.min(1, slCnt * 0.12);
-                      else if (slotTargetingMode === "exclude" && slCnt > 0) avail *= Math.max(0.3, 1 - slCnt * 0.04);
+                      let avail: number;
+                      if (draft.adType === "interstitial") {
+                        avail = 2_500_000;
+                        if (aCnt > 0) avail *= Math.max(0.05, 1 - aCnt * 0.2);
+                        if (hasComp) avail *= 0.55;
+                      } else if (draft.adType === "video_popup") {
+                        avail = 1_800_000;
+                        if (aCnt > 0) avail *= Math.max(0.05, 1 - aCnt * 0.2);
+                        if (hasComp) avail *= 0.55;
+                      } else {
+                        const BASE_INV = 15_000_000;
+                        const slCnt = slotTargetingMode === "include" ? draft.slotIds.length : draft.excludedSlotIds.length;
+                        avail = BASE_INV;
+                        if (aCnt > 0) avail *= Math.max(0.02, 1 - aCnt * 0.18);
+                        if (hasComp) avail *= 0.6;
+                        if (slotTargetingMode === "include" && slCnt > 0) avail *= Math.min(1, slCnt * 0.12);
+                        else if (slotTargetingMode === "exclude" && slCnt > 0) avail *= Math.max(0.3, 1 - slCnt * 0.04);
+                      }
                       const availableViews = Math.round(avail);
 
                       let recBid = 3.5;
@@ -1816,7 +1878,17 @@ export function SinglePageFlow({ onCampaignSubmit }: SinglePageFlowProps) {
 
                       return (
                         <div>
-                          <h3 className="font-semibold text-gray-900 mb-3">Ready to submit?</h3>
+                          <div className="flex items-center gap-2 mb-3">
+                            <h3 className="font-semibold text-gray-900">Ready to submit?</h3>
+                            {draft.adType !== "banner" && (
+                              <span className={cn(
+                                "px-2 py-0.5 text-xs font-medium rounded-full",
+                                draft.adType === "interstitial" ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700"
+                              )}>
+                                {draft.adType === "interstitial" ? "Interstitial" : "Video Popup"}
+                              </span>
+                            )}
+                          </div>
                           <div className="grid grid-cols-5 gap-3 text-sm mb-3">
                             <div>
                               <span className="text-gray-500 block text-xs">{draft.budgetType === "daily" ? "Daily Budget" : "Total Budget"}</span>

@@ -1494,5 +1494,94 @@ with search, filters, and expandable rows revealing child campaigns.
   src/components/SalesIntakePage.tsx → replaced by BookingDetailPage.tsx
 
 ================================================================================
+31. AD TYPE EXTENSION — INTERSTITIAL & VIDEO POPUP (February 2026)
+================================================================================
+
+31a) Concept
+The campaign builder previously assumed all inventory follows Page → Slot Group → Slot
+(banner placements). Two new full-screen ad formats were introduced:
+
+  - Interstitial  — full-screen image popup
+  - Video Popup   — full-screen video placement
+
+Both are CPM-only, use a single fixed slot (no slot targeting), and have their own
+creative dimension requirements.
+
+31b) Data Model Changes (src/lib/types.ts)
+  - New type: AdType = "banner" | "interstitial" | "video_popup"
+  - New constants: INTERSTITIAL_SLOT_ID, VIDEO_POPUP_SLOT_ID
+  - New constants: INTERSTITIAL_DIMENSIONS (1080x1080, 1080x1350, 1080x1440, 1080x1920)
+  - New constants: VIDEO_POPUP_DIMENSIONS (1080x1920, 1920x1080)
+  - CampaignDraft now includes adType: AdType (defaults to "banner")
+
+31c) Mock Data (src/lib/mock-data.ts)
+  - Two fixed Slot entries added to the slots array:
+    • slot-interstitial (Interstitial Popup, avgDailyViews 2.5M)
+    • slot-video-popup (Video Popup, avgDailyViews 1.8M)
+
+31d) Campaign Builder (src/components/SinglePageFlow.tsx)
+  - Ad Type selector card appears after the Pricing Model section for Managed Display
+    (brand + CPM). Three options: Banner (default), Interstitial, Video Popup.
+  - Selecting Interstitial or Video Popup forces pricingModel to "cpm" and auto-assigns
+    the fixed slot ID.
+  - CPT radio card is disabled when adType ≠ "banner".
+  - CPM review summary shows ad type badge and uses ad-type-specific inventory
+    calculations.
+
+31e) Slot Targeting (src/components/sections/BrandTargetingSection.tsx)
+  - Slot targeting UI hidden when adType ≠ "banner".
+  - An info box appears instead: "Fixed Slot: Interstitial Popup / Video Popup —
+    no slot targeting needed."
+
+31f) Delivery Forecast (src/components/sections/BiddingSection.tsx)
+  - Available views calculation is ad-type-aware:
+    • Interstitial base: 2.5M (reduced by audience targeting)
+    • Video Popup base: 1.8M (reduced by audience targeting)
+    • Banner: existing estimateAvailableViews() function
+  - Expected Views formula unchanged: (Budget ÷ Bid) × 1000
+
+31g) Creatives (src/components/sections/CreativesSection.tsx)
+  - Non-banner ad types get a dedicated creative upload flow:
+    • Shows allowed dimensions and format (image for interstitial, video for video popup)
+    • Per-language (EN/AR) upload with at least one required
+    • Dimension validation against allowed sizes
+    • Uploaded creatives show format-specific icons (Film for video, Image for image)
+  - Banner ad types continue to use the existing SLOT_DIMENSIONS-based upload.
+
+31h) Flow Summary
+  Banner:      Slot targeting → Audience targeting → Delivery forecast → Creatives (banner)
+  Interstitial: [fixed slot] → Audience targeting → Delivery forecast → Creatives (image)
+  Video Popup:  [fixed slot] → Audience targeting → Delivery forecast → Creatives (video)
+
+31i) Video Popup — Thumbnail Support
+  Each uploaded video must include a thumbnail image:
+  - Thumbnails are tracked in local component state (videoThumbnails map)
+  - Thumbnail dimensions must match the video dimensions exactly
+  - Upload button shows amber dashed border with "Required" label
+  - Missing thumbnails are surfaced in the status badge ("X thumbnails missing")
+  - Thumbnails appear below their video in a green success row
+  - Completeness requires both video AND thumbnail for each creative
+
+31j) Interstitial — Multi-Creative Support
+  Multiple creatives can be uploaded per language, but all must share dimensions:
+  - The first uploaded creative "locks" the campaign dimension
+  - Subsequent uploads are restricted to that dimension only
+  - The format info box shows the locked dimension with a checkmark
+  - An info message explains: "All creatives must match [dimension] (set by first upload)"
+  - "Add another" upload button remains visible for adding more creatives at the locked dimension
+
+31k) Creative Preview Section
+  Both Interstitial and Video Popup include a side-by-side preview panel:
+  - Preview is displayed in a mobile device frame (rounded bezel, notch, home indicator)
+  - Language toggle (EN / AR) switches which set of creatives to preview
+  - Interstitial: shows the uploaded image at correct aspect ratio; if multiple creatives
+    exist, left/right navigation arrows and dot indicators allow cycling through them
+  - Video Popup: shows the thumbnail as the default preview image with a centered play
+    button overlay; clicking toggles a mock "playing" state; shows "No thumbnail" fallback
+    if thumbnail is not yet uploaded
+  - Preview updates immediately when creatives are uploaded or removed
+  - "No preview available" empty state shown when no creatives exist for selected language
+
+================================================================================
 END OF DOCUMENT
 ================================================================================

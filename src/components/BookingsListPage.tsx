@@ -33,12 +33,12 @@ import {
 
 const STATUS_CONFIG: Record<BookingStatus, { label: string; color: string; bg: string; dot: string }> = {
   draft: { label: "Draft", color: "text-gray-700", bg: "bg-gray-100", dot: "bg-gray-400" },
-  pending_approval: { label: "Pending Approval", color: "text-amber-700", bg: "bg-amber-50", dot: "bg-amber-400" },
+  pending_approval: { label: "Pending", color: "text-amber-700", bg: "bg-amber-50", dot: "bg-amber-400" },
   approved: { label: "Approved", color: "text-blue-700", bg: "bg-blue-50", dot: "bg-blue-400" },
   rejected: { label: "Rejected", color: "text-red-700", bg: "bg-red-50", dot: "bg-red-400" },
-  in_planning: { label: "In Planning", color: "text-purple-700", bg: "bg-purple-50", dot: "bg-purple-400" },
-  partially_converted: { label: "Partially Converted", color: "text-orange-700", bg: "bg-orange-50", dot: "bg-orange-400" },
-  fully_converted: { label: "Fully Converted", color: "text-green-700", bg: "bg-green-50", dot: "bg-green-500" },
+  in_planning: { label: "Planning", color: "text-purple-700", bg: "bg-purple-50", dot: "bg-purple-400" },
+  partially_converted: { label: "Partial", color: "text-orange-700", bg: "bg-orange-50", dot: "bg-orange-400" },
+  fully_converted: { label: "Converted", color: "text-green-700", bg: "bg-green-50", dot: "bg-green-500" },
 };
 
 const CAMPAIGN_STATUS_CONFIG: Record<BookingCampaignStatus, { label: string; color: string; bg: string }> = {
@@ -249,33 +249,46 @@ export function BookingsListPage({ onOpenBooking, onNewBooking, onAddCampaign, a
             </button>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <div>
+            <table className="w-full text-sm table-fixed">
+              <colgroup>
+                <col className="w-[36px]" />
+                <col className="w-[18%]" />
+                <col className="w-[12%]" />
+                <col className="w-[12%]" />
+                <col className="w-[6%]" />
+                <col className="w-[7%]" />
+                <col className="w-[10%]" />
+                <col className="w-[6%]" />
+                <col className="w-[10%]" />
+                <col className="w-[11%]" />
+                <col className="w-[8%]" />
+              </colgroup>
               <thead>
                 <tr className="border-b border-gray-200 bg-gray-50/80">
-                  <th className="w-10 px-3 py-3" />
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Booking</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Brand</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600 hidden lg:table-cell">LE Code</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Type</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Country</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">
+                  <th className="px-2 py-3" />
+                  <th className="text-left px-3 py-3 font-medium text-gray-600">Booking</th>
+                  <th className="text-left px-3 py-3 font-medium text-gray-600">Brand</th>
+                  <th className="text-left px-3 py-3 font-medium text-gray-600">LE Code</th>
+                  <th className="text-left px-3 py-3 font-medium text-gray-600">Type</th>
+                  <th className="text-left px-3 py-3 font-medium text-gray-600">Country</th>
+                  <th className="text-left px-3 py-3 font-medium text-gray-600">
                     <button onClick={() => toggleSort("netBudget")} className="flex items-center gap-1 hover:text-gray-900">
-                      Net Budget <SortIcon field="netBudget" />
+                      Budget <SortIcon field="netBudget" />
                     </button>
                   </th>
-                  <th className="text-center px-4 py-3 font-medium text-gray-600">Campaigns</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">
+                  <th className="text-center px-2 py-3 font-medium text-gray-600">Camp.</th>
+                  <th className="text-left px-3 py-3 font-medium text-gray-600">
                     <button onClick={() => toggleSort("status")} className="flex items-center gap-1 hover:text-gray-900">
                       Status <SortIcon field="status" />
                     </button>
                   </th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">
+                  <th className="text-left px-3 py-3 font-medium text-gray-600">
                     <button onClick={() => toggleSort("lastUpdated")} className="flex items-center gap-1 hover:text-gray-900">
                       Updated <SortIcon field="lastUpdated" />
                     </button>
                   </th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-600">Actions</th>
+                  <th className="text-right px-3 py-3 font-medium text-gray-600">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -294,7 +307,7 @@ export function BookingsListPage({ onOpenBooking, onNewBooking, onAddCampaign, a
                     <React.Fragment key={b.id}>
                       <tr className={cn("border-b border-gray-100 hover:bg-gray-50/80 transition-colors", isExpanded && "bg-gray-50/50")}>
                         {/* Expand toggle */}
-                        <td className="px-3 py-3">
+                        <td className="px-2 py-3">
                           <button
                             onClick={(e) => { e.stopPropagation(); toggleRow(b.id); }}
                             className={cn("p-1 rounded hover:bg-gray-200 transition-colors", b.campaigns.length === 0 && "opacity-30 cursor-default")}
@@ -303,25 +316,25 @@ export function BookingsListPage({ onOpenBooking, onNewBooking, onAddCampaign, a
                             {isExpanded ? <ChevronDown className="w-4 h-4 text-gray-500" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
                           </button>
                         </td>
-                        <td className="px-4 py-3 cursor-pointer" onClick={() => onOpenBooking(b.id)}>
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-gray-900 truncate max-w-[200px]">
+                        <td className="px-3 py-3 cursor-pointer" onClick={() => onOpenBooking(b.id)}>
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="font-medium text-gray-900 truncate">
                               {b.bookingName || <span className="text-gray-400 italic">Untitled</span>}
                             </span>
                             {incomplete && <span title="Missing required fields"><AlertCircle className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" /></span>}
                           </div>
-                          <span className="text-xs text-gray-400 font-mono">{b.id}</span>
+                          <span className="text-xs text-gray-400 font-mono truncate block">{b.id}</span>
                         </td>
-                        <td className="px-4 py-3 text-gray-700">{brandMap[b.brandCode] || b.brandCode || "—"}</td>
-                        <td className="px-4 py-3 text-gray-500 font-mono text-xs hidden lg:table-cell">{b.partnerLeCode || "—"}</td>
-                        <td className="px-4 py-3 text-gray-700">{ADV_TYPE_LABELS[b.advertiserType] || "—"}</td>
-                        <td className="px-4 py-3 text-gray-700">{COUNTRY_LABELS[b.campaignCountry] || b.campaignCountry || "—"}</td>
-                        <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">
-                          {net > 0 ? `${b.currency === "USD" ? "$" : ""}${net.toLocaleString(undefined, { maximumFractionDigits: 0 })}${b.currency === "AED" ? " AED" : ""}` : "—"}
+                        <td className="px-3 py-3 text-gray-700 truncate">{brandMap[b.brandCode] || b.brandCode || "—"}</td>
+                        <td className="px-3 py-3 text-gray-500 font-mono text-xs truncate">{b.partnerLeCode || "—"}</td>
+                        <td className="px-3 py-3 text-gray-700">{ADV_TYPE_LABELS[b.advertiserType] || "—"}</td>
+                        <td className="px-3 py-3 text-gray-700">{COUNTRY_LABELS[b.campaignCountry] || b.campaignCountry || "—"}</td>
+                        <td className="px-3 py-3 font-medium text-gray-900 whitespace-nowrap">
+                          {net > 0 ? `${b.currency === "USD" ? "$" : ""}${net.toLocaleString(undefined, { maximumFractionDigits: 0 })}${b.currency !== "USD" ? ` ${b.currency}` : ""}` : "—"}
                         </td>
-                        <td className="px-4 py-3 text-center">
+                        <td className="px-2 py-3 text-center">
                           {b.campaigns.length > 0 ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-primary-50 text-primary-700">
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-medium bg-primary-50 text-primary-700">
                               <Layers className="w-3 h-3" />
                               {b.campaigns.length}
                             </span>
@@ -329,19 +342,19 @@ export function BookingsListPage({ onOpenBooking, onNewBooking, onAddCampaign, a
                             <span className="text-xs text-gray-400">—</span>
                           )}
                         </td>
-                        <td className="px-4 py-3">
-                          <span className={cn("inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium", statusCfg.bg, statusCfg.color)}>
-                            <span className={cn("w-1.5 h-1.5 rounded-full", statusCfg.dot)} />
+                        <td className="px-3 py-3">
+                          <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap", statusCfg.bg, statusCfg.color)}>
+                            <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", statusCfg.dot)} />
                             {statusCfg.label}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
+                        <td className="px-3 py-3 text-gray-500 text-xs whitespace-nowrap">
                           {b.lastUpdated.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                           <span className="text-gray-400 ml-1">
                             {b.lastUpdated.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-right">
+                        <td className="px-3 py-3 text-right">
                           <div className="relative inline-block">
                             <button
                               onClick={(e) => { e.stopPropagation(); setOpenMenu(openMenu === b.id ? null : b.id); }}

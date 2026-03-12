@@ -126,7 +126,7 @@ export function SinglePageFlow({ onCampaignSubmit }: SinglePageFlowProps) {
   const { draft, updateDraft } = useCampaign();
   const isBookingLinked = !!draft.linkedBookingId;
   const [activeSection, setActiveSection] = useState("entry");
-  const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
 
   // Local state for form inputs
   const [budgetStr, setBudgetStr] = useState(draft.budget.toString());
@@ -1417,7 +1417,7 @@ export function SinglePageFlow({ onCampaignSubmit }: SinglePageFlowProps) {
                                   if (!date) return <div key={idx} />;
                                   const isSelected = draft.endDate?.toDateString() === date.toDateString();
                                   const isStartDate = draft.startDate?.toDateString() === date.toDateString();
-                                  const isBeforeStart = draft.startDate && date < draft.startDate;
+                                  const isBeforeStart = !!(draft.startDate && date < draft.startDate);
                                   const isPast = date < today;
                                   const isDisabled = isPast || isBeforeStart;
                                   

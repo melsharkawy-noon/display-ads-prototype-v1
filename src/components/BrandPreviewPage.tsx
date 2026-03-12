@@ -89,7 +89,7 @@ export function BrandPreviewPage({ onClose }: BrandPreviewPageProps) {
         {required && <span className="text-red-500 ml-1">*</span>}
         <Lock className="w-3 h-3 inline-block ml-1.5 text-gray-400" />
       </label>
-      <div className="w-full px-4 py-2.5 border border-gray-200 rounded-lg bg-gray-50 text-gray-700 text-sm">
+      <div className="w-full px-3 py-2.5 border border-gray-200 rounded-lg bg-gray-50 text-gray-700 text-sm">
         {value || <span className="text-gray-400 italic">Not provided</span>}
       </div>
     </div>
@@ -99,7 +99,7 @@ export function BrandPreviewPage({ onClose }: BrandPreviewPageProps) {
     <div className="fixed inset-0 z-[60] bg-gray-50 overflow-y-auto">
       {/* Brand View Banner */}
       <div className="bg-gradient-to-r from-violet-600 to-purple-600 text-white">
-        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-7 h-7 bg-white/20 rounded-lg flex items-center justify-center">
               <CheckCircle className="w-4 h-4" />
@@ -116,7 +116,7 @@ export function BrandPreviewPage({ onClose }: BrandPreviewPageProps) {
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
+      <div className="max-w-7xl mx-auto px-6 py-8 space-y-6">
         {/* Header */}
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Booking Approval Request</h1>
@@ -133,7 +133,7 @@ export function BrandPreviewPage({ onClose }: BrandPreviewPageProps) {
 
         <div className="grid grid-cols-12 gap-6">
           {/* Left: Details */}
-          <div className="col-span-8 space-y-6">
+          <div className="col-span-9 space-y-6">
             {/* Booking Overview */}
             <Card>
               <div className="p-5 border-b border-gray-100 flex items-center gap-2">
@@ -141,31 +141,36 @@ export function BrandPreviewPage({ onClose }: BrandPreviewPageProps) {
                 <h2 className="text-lg font-semibold text-gray-900">Booking Overview</h2>
               </div>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-4">
+                  <ReadOnlyField label="Booking Code" value={intake.id} />
                   {editable.has("bookingName") ? (
                     <Input label="Booking Name" required value={intake.bookingName} onChange={(e) => updateIntake({ bookingName: e.target.value })} />
                   ) : (
                     <ReadOnlyField label="Booking Name" value={intake.bookingName} required />
                   )}
-                  <ReadOnlyField label="Sales Contact" value={intake.salesEmail} />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
                   <ReadOnlyField label="Partner LE Code" value={intake.partnerLeCode} required />
+                </div>
+                <div className="grid grid-cols-3 gap-4">
                   <ReadOnlyField label="Brand" value={brandName} required />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
                   <ReadOnlyField label="Advertiser Type" value={advTypeLabel(intake.advertiserType)} required />
-                  <ReadOnlyField label="Advertiser Country" value={countryLabel(intake.advertiserCountry)} required />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <ReadOnlyField label="Campaign Country" value={countryLabel(intake.campaignCountry)} required />
                   {editable.has("brandBusiness") ? (
                     <Input label="Brand Business" value={intake.brandBusiness} onChange={(e) => updateIntake({ brandBusiness: e.target.value })} />
                   ) : (
                     <ReadOnlyField label="Brand Business" value={intake.brandBusiness} />
                   )}
                 </div>
-                {intake.commercialCategory && <ReadOnlyField label="Commercial Category" value={intake.commercialCategory} />}
+                <div className="grid grid-cols-3 gap-4">
+                  <ReadOnlyField label="Advertiser Country" value={countryLabel(intake.advertiserCountry)} required />
+                  <ReadOnlyField label="Campaign Country" value={countryLabel(intake.campaignCountry)} required />
+                  {intake.commercialCategory ? (
+                    <ReadOnlyField label="Commercial Category" value={intake.commercialCategory} />
+                  ) : (
+                    <div />
+                  )}
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <ReadOnlyField label="Sales Contact" value={intake.salesEmail} />
+                </div>
               </CardContent>
             </Card>
 
@@ -180,7 +185,7 @@ export function BrandPreviewPage({ onClose }: BrandPreviewPageProps) {
                   {editable.has("finalBudget") ? (
                     <Input label="Final Budget" required type="number" min={0} value={intake.finalBudget || ""} onChange={(e) => updateIntake({ finalBudget: parseFloat(e.target.value) || 0 })} />
                   ) : (
-                    <ReadOnlyField label="Final Budget" value={`${intake.currency === "USD" ? "$" : ""}${intake.finalBudget.toLocaleString()}${intake.currency === "AED" ? " AED" : ""}`} required />
+                    <ReadOnlyField label="Final Budget" value={`${intake.currency === "USD" ? "$" : ""}${intake.finalBudget.toLocaleString()}${intake.currency !== "USD" ? ` ${intake.currency}` : ""}`} required />
                   )}
                   <ReadOnlyField label="Discount" value={`${intake.discountPercent}%`} />
                   <ReadOnlyField label="Currency" value={intake.currency} />
@@ -190,7 +195,7 @@ export function BrandPreviewPage({ onClose }: BrandPreviewPageProps) {
                     <div className="grid grid-cols-3 gap-4">
                       <div>
                         <span className="text-xs text-gray-500 block">Gross</span>
-                        <span className="text-lg font-bold text-gray-900">{intake.currency === "USD" ? "$" : ""}{budgetCalcs.gross.toLocaleString()}{intake.currency === "AED" ? " AED" : ""}</span>
+                        <span className="text-lg font-bold text-gray-900">{intake.currency === "USD" ? "$" : ""}{budgetCalcs.gross.toLocaleString()}{intake.currency !== "USD" ? ` ${intake.currency}` : ""}</span>
                       </div>
                       <div>
                         <span className="text-xs text-gray-500 block">Discount</span>
@@ -198,7 +203,7 @@ export function BrandPreviewPage({ onClose }: BrandPreviewPageProps) {
                       </div>
                       <div>
                         <span className="text-xs text-gray-500 block">Net Budget</span>
-                        <span className={cn("text-lg font-bold", budgetCalcs.belowMinimum ? "text-red-600" : "text-green-600")}>{intake.currency === "USD" ? "$" : ""}{budgetCalcs.net.toLocaleString(undefined, { maximumFractionDigits: 2 })}{intake.currency === "AED" ? " AED" : ""}</span>
+                        <span className={cn("text-lg font-bold", budgetCalcs.belowMinimum ? "text-red-600" : "text-green-600")}>{intake.currency === "USD" ? "$" : ""}{budgetCalcs.net.toLocaleString(undefined, { maximumFractionDigits: 2 })}{intake.currency !== "USD" ? ` ${intake.currency}` : ""}</span>
                       </div>
                     </div>
                   </div>
@@ -217,29 +222,36 @@ export function BrandPreviewPage({ onClose }: BrandPreviewPageProps) {
                 </div>
                 <CardContent className="space-y-4">
                   {intake.tentativeStartDate && (
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-3 gap-4">
                       <ReadOnlyField label="Tentative Start" value={intake.tentativeStartDate.toLocaleDateString()} />
-                      {intake.tentativeEndDate && <ReadOnlyField label="Tentative End" value={intake.tentativeEndDate.toLocaleDateString()} />}
+                      {intake.tentativeEndDate ? <ReadOnlyField label="Tentative End" value={intake.tentativeEndDate.toLocaleDateString()} /> : <div />}
+                      <div />
                     </div>
                   )}
                   {intake.mediaPlan.length > 0 && (
                     <div className="border border-gray-200 rounded-lg overflow-hidden">
-                      <table className="w-full text-sm">
+                      <table className="w-full text-sm table-fixed">
+                        <colgroup>
+                          <col className="w-[35%]" />
+                          <col className="w-[25%]" />
+                          <col className="w-[15%]" />
+                          <col className="w-[25%]" />
+                        </colgroup>
                         <thead>
                           <tr className="bg-gray-50 border-b border-gray-200">
-                            <th className="text-left px-3 py-2 font-medium text-gray-600">Channel</th>
-                            <th className="text-left px-3 py-2 font-medium text-gray-600">Ad Type</th>
-                            <th className="text-center px-3 py-2 font-medium text-gray-600">Share %</th>
-                            <th className="text-center px-3 py-2 font-medium text-gray-600">Value</th>
+                            <th className="text-left px-3 py-2.5 font-medium text-gray-600">Channel</th>
+                            <th className="text-left px-3 py-2.5 font-medium text-gray-600">Ad Type</th>
+                            <th className="text-center px-3 py-2.5 font-medium text-gray-600">Share %</th>
+                            <th className="text-center px-3 py-2.5 font-medium text-gray-600">Value</th>
                           </tr>
                         </thead>
                         <tbody>
                           {intake.mediaPlan.map((row) => (
                             <tr key={row.id} className="border-b border-gray-100 last:border-b-0">
-                              <td className="px-3 py-2 text-gray-700">{row.channel || "—"}</td>
-                              <td className="px-3 py-2 text-gray-700">{row.adType || "—"}</td>
-                              <td className="px-3 py-2 text-center text-gray-700">{row.sharePercent}%</td>
-                              <td className="px-3 py-2 text-center text-gray-700">{row.shareValue > 0 ? `$${row.shareValue.toLocaleString()}` : "—"}</td>
+                              <td className="px-3 py-2.5 text-gray-700 truncate">{row.channel || "—"}</td>
+                              <td className="px-3 py-2.5 text-gray-700 truncate">{row.adType || "—"}</td>
+                              <td className="px-3 py-2.5 text-center text-gray-700">{row.sharePercent}%</td>
+                              <td className="px-3 py-2.5 text-center text-gray-700">{row.shareValue > 0 ? `$${row.shareValue.toLocaleString()}` : "—"}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -248,14 +260,14 @@ export function BrandPreviewPage({ onClose }: BrandPreviewPageProps) {
                   )}
                   {intake.planningNotes && (
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1"><MapPin className="w-3.5 h-3.5 inline mr-1" />Planning Notes</label>
-                      <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 whitespace-pre-wrap">{intake.planningNotes}</div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5"><MapPin className="w-3.5 h-3.5 inline mr-1.5" />Planning Notes</label>
+                      <div className="px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 whitespace-pre-wrap">{intake.planningNotes}</div>
                     </div>
                   )}
                   {intake.audienceNotes && (
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1"><Users className="w-3.5 h-3.5 inline mr-1" />Audience Notes</label>
-                      <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 whitespace-pre-wrap">{intake.audienceNotes}</div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5"><Users className="w-3.5 h-3.5 inline mr-1.5" />Audience Notes</label>
+                      <div className="px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 whitespace-pre-wrap">{intake.audienceNotes}</div>
                     </div>
                   )}
                 </CardContent>
@@ -264,7 +276,7 @@ export function BrandPreviewPage({ onClose }: BrandPreviewPageProps) {
           </div>
 
           {/* Right: Forecast + Actions */}
-          <div className="col-span-4 space-y-5">
+          <div className="col-span-3 space-y-5">
             {/* Forecast */}
             {intake.finalBudget > 0 && (
               <Card>

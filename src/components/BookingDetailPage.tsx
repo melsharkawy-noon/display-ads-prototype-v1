@@ -19,8 +19,10 @@ import {
   MIN_BUDGET_USD,
   ActivityLogEntry,
   MediaPlanRow,
+  IntakeCurrency,
   createMediaPlanRow,
   deriveConversionStatus,
+  COUNTRY_LOCAL_CURRENCY,
 } from "@/lib/types";
 import { brands } from "@/lib/mock-data";
 import { Card, CardContent } from "@/components/ui/Card";
@@ -186,6 +188,7 @@ export function BookingDetailPage({ onAddCampaign, onOpenBrandPreview, onBackToL
   );
   const statusCfg = STATUS_CONFIG[derivedStatus] || STATUS_CONFIG.draft;
   const is1P = intake.advertiserType === "1P";
+  const localCurrency = COUNTRY_LOCAL_CURRENCY[intake.campaignCountry] || null;
 
   const budgetCalcs = useMemo(() => {
     const gross = intake.finalBudget || 0;
@@ -264,7 +267,7 @@ export function BookingDetailPage({ onAddCampaign, onOpenBrandPreview, onBackToL
   const mediaPlanTotalPercent = intake.mediaPlan.reduce((s, r) => s + (r.sharePercent || 0), 0);
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
+    <div className="max-w-7xl mx-auto px-6 py-8 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -334,7 +337,7 @@ export function BookingDetailPage({ onAddCampaign, onOpenBrandPreview, onBackToL
 
       <div className="grid grid-cols-12 gap-6">
         {/* ── Left Column ─────────────────────────────────────── */}
-        <div className="col-span-8 space-y-6">
+        <div className="col-span-9 space-y-6">
           {/* SECTION 1 — Booking Overview */}
           <Card>
             <div className="p-5 border-b border-gray-100 flex items-center gap-2">
@@ -343,29 +346,27 @@ export function BookingDetailPage({ onAddCampaign, onOpenBrandPreview, onBackToL
             </div>
             <CardContent className="space-y-4">
               {/* Booking Code (read-only) */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">Booking Code</label>
-                  <div className="w-full px-4 py-2.5 border border-gray-200 rounded-lg bg-gray-50 text-gray-700 text-sm font-mono">
+                  <div className="w-full px-3 py-2.5 border border-gray-200 rounded-lg bg-gray-50 text-gray-700 text-sm font-mono">
                     {intake.id}
                   </div>
                 </div>
+                <Input label="Booking Name" required placeholder="e.g., Samsung Galaxy S25 Launch" value={intake.bookingName} onChange={(e) => handleFieldUpdate({ bookingName: e.target.value })} error={inlineError("bookingName")} />
+                <Input label="Partner LE Code" required placeholder="e.g., LE1CKL5STAE" value={intake.partnerLeCode} onChange={(e) => handleFieldUpdate({ partnerLeCode: e.target.value })} error={inlineError("partnerLeCode")} />
+              </div>
+              <div className="grid grid-cols-3 gap-4">
                 <Input label="Sales Email" value={intake.salesEmail} disabled helper="Auto-filled from your account" />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <Input label="Booking Name" required placeholder="e.g., Samsung Galaxy S25 Launch" value={intake.bookingName} onChange={(e) => handleFieldUpdate({ bookingName: e.target.value })} error={inlineError("bookingName")} />
-                <Input label="Partner LE Code" required placeholder="e.g., LE-00123" value={intake.partnerLeCode} onChange={(e) => handleFieldUpdate({ partnerLeCode: e.target.value })} error={inlineError("partnerLeCode")} />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <Select label="Brand Code" required value={intake.brandCode} onChange={(e) => { handleFieldUpdate({ brandCode: e.target.value }); }} placeholder="Select brand..." options={brands.map((b) => ({ value: b.id, label: b.name }))} error={inlineError("brandCode")} />
                 <Select label="Advertiser Type" required value={intake.advertiserType} onChange={(e) => handleFieldUpdate({ advertiserType: e.target.value as AdvertiserType })} placeholder="Select type..." options={ADVERTISER_TYPE_OPTIONS} error={inlineError("advertiserType")} />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <Select label="Advertiser Registered Country" required value={intake.advertiserCountry} onChange={(e) => handleFieldUpdate({ advertiserCountry: e.target.value })} placeholder="Select country..." options={COUNTRY_OPTIONS} error={inlineError("advertiserCountry")} />
-                <Select label="Campaign Country" required value={intake.campaignCountry} onChange={(e) => handleFieldUpdate({ campaignCountry: e.target.value })} placeholder="Select country..." options={COUNTRY_OPTIONS} error={inlineError("campaignCountry")} />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
                 <Input label="Brand Business" placeholder="e.g., Consumer Electronics" value={intake.brandBusiness} onChange={(e) => handleFieldUpdate({ brandBusiness: e.target.value })} />
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <Select label="Advertiser Country" required value={intake.advertiserCountry} onChange={(e) => handleFieldUpdate({ advertiserCountry: e.target.value })} placeholder="Select country..." options={COUNTRY_OPTIONS} error={inlineError("advertiserCountry")} />
+                <Select label="Campaign Country" required value={intake.campaignCountry} onChange={(e) => handleFieldUpdate({ campaignCountry: e.target.value })} placeholder="Select country..." options={COUNTRY_OPTIONS} error={inlineError("campaignCountry")} />
                 <Select label="Commercial Category" value={intake.commercialCategory} onChange={(e) => handleFieldUpdate({ commercialCategory: e.target.value })} placeholder="Select category..." options={COMMERCIAL_CATEGORIES.map((c) => ({ value: c, label: c }))} />
               </div>
               {is1P && (
@@ -382,22 +383,23 @@ export function BookingDetailPage({ onAddCampaign, onOpenBrandPreview, onBackToL
             </div>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-3 gap-4">
-                <Input label="Final Budget (excl. tax & discounts)" required type="number" min={0} placeholder="0" value={intake.finalBudget || ""} onChange={(e) => handleFieldUpdate({ finalBudget: parseFloat(e.target.value) || 0 })} error={inlineError("finalBudget")} />
-                <Input label="Expected Discount %" required type="number" min={0} max={100} placeholder="0" value={intake.discountPercent || ""} onChange={(e) => handleFieldUpdate({ discountPercent: parseFloat(e.target.value) || 0 })} />
+                <Input label="Final Budget (excl. tax)" required type="number" min={0} placeholder="0" value={intake.finalBudget || ""} onChange={(e) => handleFieldUpdate({ finalBudget: parseFloat(e.target.value) || 0 })} error={inlineError("finalBudget")} />
+                <Input label="Discount %" required type="number" min={0} max={100} placeholder="0" value={intake.discountPercent || ""} onChange={(e) => handleFieldUpdate({ discountPercent: parseFloat(e.target.value) || 0 })} />
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">Currency <span className="text-red-500 ml-1">*</span></label>
                   <div className="flex gap-2">
-                    {(["USD", "AED"] as const).map((cur) => (
-                      <button key={cur} onClick={() => handleFieldUpdate({ currency: cur })} className={cn("flex-1 py-2.5 rounded-lg text-sm font-medium border transition-colors", intake.currency === cur ? "border-primary-500 bg-primary-50 text-primary-700" : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50")}>
+                    {(["USD", localCurrency].filter(Boolean) as IntakeCurrency[]).map((cur) => (
+                      <button key={cur} onClick={() => handleFieldUpdate({ currency: cur })} className={cn("flex-1 px-3 py-[9px] rounded-lg text-sm font-medium border transition-colors", intake.currency === cur ? "border-primary-500 bg-primary-50 text-primary-700" : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50")}>
                         {cur}
                       </button>
                     ))}
                   </div>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <Select label="Delayed Payment Interest" value={intake.delayedPayment} onChange={(e) => handleFieldUpdate({ delayedPayment: e.target.value })} options={DELAYED_PAYMENT_OPTIONS.map((d) => ({ value: d, label: d }))} />
+              <div className="grid grid-cols-3 gap-4">
+                <Select label="Delayed Payment" value={intake.delayedPayment} onChange={(e) => handleFieldUpdate({ delayedPayment: e.target.value })} options={DELAYED_PAYMENT_OPTIONS.map((d) => ({ value: d, label: d }))} />
                 <Input label="Invoicing Method" placeholder="e.g., PO-based, monthly" value={intake.invoicingMethod} onChange={(e) => handleFieldUpdate({ invoicingMethod: e.target.value })} />
+                <div />
               </div>
               {intake.finalBudget > 0 && (
                 <div className={cn("rounded-xl p-4 mt-2", overallocated ? "bg-gradient-to-r from-red-50 to-amber-50 border border-red-200" : budgetCalcs.belowMinimum ? "bg-gradient-to-r from-red-50 to-amber-50 border border-red-200" : "bg-gradient-to-r from-primary-50 to-blue-50")}>
@@ -476,41 +478,50 @@ export function BookingDetailPage({ onAddCampaign, onOpenBrandPreview, onBackToL
               </button>
             </div>
             <CardContent className="space-y-5">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5"><Calendar className="w-3.5 h-3.5 inline mr-1.5" />Tentative Start Date</label>
-                  <input type="date" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500" value={intake.tentativeStartDate ? intake.tentativeStartDate.toISOString().split("T")[0] : ""} onChange={(e) => handleFieldUpdate({ tentativeStartDate: e.target.value ? new Date(e.target.value) : null })} />
+                  <input type="date" className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500" value={intake.tentativeStartDate ? intake.tentativeStartDate.toISOString().split("T")[0] : ""} onChange={(e) => handleFieldUpdate({ tentativeStartDate: e.target.value ? new Date(e.target.value) : null })} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5"><Calendar className="w-3.5 h-3.5 inline mr-1.5" />Tentative End Date</label>
-                  <input type="date" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500" value={intake.tentativeEndDate ? intake.tentativeEndDate.toISOString().split("T")[0] : ""} onChange={(e) => handleFieldUpdate({ tentativeEndDate: e.target.value ? new Date(e.target.value) : null })} />
+                  <input type="date" className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500" value={intake.tentativeEndDate ? intake.tentativeEndDate.toISOString().split("T")[0] : ""} onChange={(e) => handleFieldUpdate({ tentativeEndDate: e.target.value ? new Date(e.target.value) : null })} />
                 </div>
+                <div />
               </div>
 
               {intake.mediaPlan.length > 0 ? (
                 <div className="border border-gray-200 rounded-lg overflow-hidden">
-                  <table className="w-full text-sm">
+                  <table className="w-full text-sm table-fixed">
+                    <colgroup>
+                      <col className="w-[28%]" />
+                      <col className="w-[20%]" />
+                      <col className="w-[10%]" />
+                      <col className="w-[12%]" />
+                      <col className="w-[24%]" />
+                      <col className="w-[6%]" />
+                    </colgroup>
                     <thead>
                       <tr className="bg-gray-50 border-b border-gray-200">
                         <th className="text-left px-3 py-2.5 font-medium text-gray-600">Channel / Asset</th>
                         <th className="text-left px-3 py-2.5 font-medium text-gray-600">Ad Type</th>
-                        <th className="text-center px-3 py-2.5 font-medium text-gray-600 w-24">Share %</th>
-                        <th className="text-center px-3 py-2.5 font-medium text-gray-600 w-28">Value</th>
+                        <th className="text-center px-3 py-2.5 font-medium text-gray-600">Share %</th>
+                        <th className="text-center px-3 py-2.5 font-medium text-gray-600">Value</th>
                         <th className="text-left px-3 py-2.5 font-medium text-gray-600">Audience Notes</th>
-                        <th className="w-10 px-2 py-2.5" />
+                        <th className="px-2 py-2.5" />
                       </tr>
                     </thead>
                     <tbody>
                       {intake.mediaPlan.map((row) => (
                         <tr key={row.id} className="border-b border-gray-100 last:border-b-0">
-                          <td className="px-3 py-2">
-                            <select value={row.channel} onChange={(e) => updateMediaPlanRow(row.id, { channel: e.target.value })} className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary-500">
+                          <td className="px-2 py-2">
+                            <select value={row.channel} onChange={(e) => updateMediaPlanRow(row.id, { channel: e.target.value })} className="w-full px-1.5 py-1.5 border border-gray-200 rounded text-xs bg-white truncate focus:outline-none focus:ring-1 focus:ring-primary-500">
                               <option value="">Select channel...</option>
                               {MEDIA_PLAN_CHANNELS.map((ch) => <option key={ch} value={ch}>{ch}</option>)}
                             </select>
                           </td>
-                          <td className="px-3 py-2">
-                            <select value={row.adType} onChange={(e) => updateMediaPlanRow(row.id, { adType: e.target.value })} className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary-500">
+                          <td className="px-2 py-2">
+                            <select value={row.adType} onChange={(e) => updateMediaPlanRow(row.id, { adType: e.target.value })} className="w-full px-1.5 py-1.5 border border-gray-200 rounded text-xs bg-white truncate focus:outline-none focus:ring-1 focus:ring-primary-500">
                               <option value="">—</option>
                               {MEDIA_PLAN_AD_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                             </select>
@@ -548,11 +559,11 @@ export function BookingDetailPage({ onAddCampaign, onOpenBrandPreview, onBackToL
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5"><MapPin className="w-3.5 h-3.5 inline mr-1.5" />Planning Notes</label>
-                <textarea rows={3} value={intake.planningNotes} onChange={(e) => handleFieldUpdate({ planningNotes: e.target.value })} placeholder="Preferred placements, pages, date exclusions, special instructions..." className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 resize-none" />
+                <textarea rows={3} value={intake.planningNotes} onChange={(e) => handleFieldUpdate({ planningNotes: e.target.value })} placeholder="Preferred placements, pages, date exclusions, special instructions..." className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 resize-none" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5"><Users className="w-3.5 h-3.5 inline mr-1.5" />Audience Targeting Notes</label>
-                <textarea rows={2} value={intake.audienceNotes} onChange={(e) => handleFieldUpdate({ audienceNotes: e.target.value })} placeholder="e.g., Top spenders, Noon One customers, Credit card users..." className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 resize-none" />
+                <textarea rows={2} value={intake.audienceNotes} onChange={(e) => handleFieldUpdate({ audienceNotes: e.target.value })} placeholder="e.g., Top spenders, Noon One customers, Credit card users..." className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 resize-none" />
               </div>
               <div className="pt-2 border-t border-gray-100">
                 <div className="flex items-center justify-between">
@@ -660,7 +671,7 @@ export function BookingDetailPage({ onAddCampaign, onOpenBrandPreview, onBackToL
         </div>
 
         {/* ── Right Column ─────────────────────────────────── */}
-        <div className="col-span-4 space-y-5">
+        <div className="col-span-3 space-y-5">
           {/* Status (auto-derived) */}
           <Card>
             <CardContent className="space-y-3">

@@ -239,7 +239,13 @@ export type BookingStatus =
   | "fully_converted";
 
 export type AdvertiserType = "1P" | "3P" | "marketplace";
-export type IntakeCurrency = "USD" | "AED";
+export type IntakeCurrency = "USD" | "AED" | "SAR" | "EGP";
+
+export const COUNTRY_LOCAL_CURRENCY: Record<string, IntakeCurrency> = {
+  AE: "AED",
+  SA: "SAR",
+  EG: "EGP",
+};
 
 export const COMMERCIAL_CATEGORIES = [
   "Electronics", "Fashion", "Beauty & Personal Care", "Home & Living",
@@ -372,7 +378,9 @@ export function createMediaPlanRow(): MediaPlanRow {
 
 export function createInitialBooking(): BookingIntake {
   const now = new Date();
-  const id = `BK-${Date.now().toString(36).toUpperCase()}`;
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  const rand = Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+  const id = `B_${rand}`;
   return {
     id,
     bookingName: "",
@@ -416,10 +424,10 @@ export function createMockBookings(): BookingIntake[] {
   };
   return [
     {
-      id: "BK-SAMSUNG-Q1",
+      id: "B_KQ0NUBQG5KSG",
       bookingName: "Samsung Galaxy S25 Ultra Launch",
       salesEmail: "ahmed.khan@noon.com",
-      partnerLeCode: "LE-00421",
+      partnerLeCode: "LE1CKL5STAE",
       brandCode: "samsung",
       advertiserType: "1P",
       advertiserCountry: "AE",
@@ -447,7 +455,7 @@ export function createMockBookings(): BookingIntake[] {
         { id: "C-SAM-2", campaignName: "S25 Ultra - Electronics CLP", status: "active", budget: 55000, pricingModel: "cpm", startDate: d(5), endDate: d(-25), impressions: 8200000, clicks: 98400, ctr: 1.2, spend: 41000, createdAt: d(4) },
       ],
       status: "partially_converted",
-      approvalLink: "https://ads.noon.com/booking/approve/BK-SAMSUNG-Q1?token=abc123",
+      approvalLink: "https://ads.noon.com/booking/approve/B_KQ0NUBQG5KSG?token=abc123",
       brandEditableFields: ["finalBudget"],
       approvedAt: d(2),
       approvedBy: "brand.manager@samsung.com",
@@ -462,10 +470,10 @@ export function createMockBookings(): BookingIntake[] {
       lastUpdated: d(1),
     },
     {
-      id: "BK-NIKE-SS26",
+      id: "B_PWVQPFFA3BCQ",
       bookingName: "Nike Summer Collection 2026",
       salesEmail: "fatima.al@noon.com",
-      partnerLeCode: "LE-00889",
+      partnerLeCode: "LE1CKR5OAAE",
       brandCode: "nike",
       advertiserType: "3P",
       advertiserCountry: "AE",
@@ -489,7 +497,7 @@ export function createMockBookings(): BookingIntake[] {
       audienceNotes: "Fashion enthusiasts, 18-35 age group",
       campaigns: [],
       status: "pending_approval",
-      approvalLink: "https://ads.noon.com/booking/approve/BK-NIKE-SS26?token=def456",
+      approvalLink: "https://ads.noon.com/booking/approve/B_PWVQPFFA3BCQ?token=def456",
       brandEditableFields: ["finalBudget", "bookingName"],
       approvedAt: null,
       approvedBy: "",
@@ -501,10 +509,10 @@ export function createMockBookings(): BookingIntake[] {
       lastUpdated: d(1),
     },
     {
-      id: "BK-LOREAL-BF",
+      id: "B_R0JYYW8WEJ1U",
       bookingName: "L'Oréal Beauty Festival",
       salesEmail: "omar.s@noon.com",
-      partnerLeCode: "LE-01102",
+      partnerLeCode: "LE1BL2LNZAE",
       brandCode: "loreal",
       advertiserType: "1P",
       advertiserCountry: "AE",
@@ -529,7 +537,7 @@ export function createMockBookings(): BookingIntake[] {
       audienceNotes: "Top spenders in Beauty, Noon One customers",
       campaigns: [],
       status: "in_planning",
-      approvalLink: "https://ads.noon.com/booking/approve/BK-LOREAL-BF?token=ghi789",
+      approvalLink: "https://ads.noon.com/booking/approve/B_R0JYYW8WEJ1U?token=ghi789",
       brandEditableFields: ["finalBudget"],
       approvedAt: d(5),
       approvedBy: "marketing@loreal-me.com",
@@ -543,10 +551,10 @@ export function createMockBookings(): BookingIntake[] {
       lastUpdated: d(4),
     },
     {
-      id: "BK-ADIDAS-EG",
+      id: "B_TX4MHWDL8F2Y",
       bookingName: "Adidas Egypt Ramadan Push",
       salesEmail: "ahmed.khan@noon.com",
-      partnerLeCode: "LE-00567",
+      partnerLeCode: "LE1BRX6KSAE",
       brandCode: "adidas",
       advertiserType: "3P",
       advertiserCountry: "EG",
@@ -578,10 +586,10 @@ export function createMockBookings(): BookingIntake[] {
       lastUpdated: d(1),
     },
     {
-      id: "BK-NESTLE-KSA",
+      id: "B_VN7CEKAP9QR3",
       bookingName: "Nestlé KSA Always-On H1",
       salesEmail: "fatima.al@noon.com",
-      partnerLeCode: "LE-00234",
+      partnerLeCode: "LE1C4DCQMAE",
       brandCode: "nestle",
       advertiserType: "1P",
       advertiserCountry: "SA",
@@ -611,7 +619,7 @@ export function createMockBookings(): BookingIntake[] {
         { id: "C-NES-3", campaignName: "Nestlé Always-On Sponsored", status: "active", budget: 32000, pricingModel: "cpm", startDate: d(15), endDate: d(-155), impressions: 3200000, clicks: 38400, ctr: 1.2, spend: 16000, createdAt: d(15) },
       ],
       status: "fully_converted",
-      approvalLink: "https://ads.noon.com/booking/approve/BK-NESTLE-KSA?token=jkl012",
+      approvalLink: "https://ads.noon.com/booking/approve/B_VN7CEKAP9QR3?token=jkl012",
       brandEditableFields: ["finalBudget"],
       approvedAt: d(20),
       approvedBy: "nestle.me@partner.com",
@@ -628,10 +636,10 @@ export function createMockBookings(): BookingIntake[] {
       lastUpdated: d(15),
     },
     {
-      id: "BK-RAMADAN-ELEC",
+      id: "B_GJ5LZWXS0A7K",
       bookingName: "Ramadan Electronics Push",
       salesEmail: "sara.m@noon.com",
-      partnerLeCode: "LE-00550",
+      partnerLeCode: "LE1CKL5STAE",
       brandCode: "samsung",
       advertiserType: "1P",
       advertiserCountry: "AE",
@@ -660,7 +668,7 @@ export function createMockBookings(): BookingIntake[] {
         { id: "C-RAM-RT", campaignName: "Retargeting Banner Campaign", status: "active", budget: 2500, pricingModel: "cpm", startDate: d(15), endDate: d(-10), impressions: 1100000, clicks: 14300, ctr: 1.3, spend: 2000, createdAt: d(15) },
       ],
       status: "fully_converted",
-      approvalLink: "https://ads.noon.com/booking/approve/BK-RAMADAN-ELEC?token=ram123",
+      approvalLink: "https://ads.noon.com/booking/approve/B_GJ5LZWXS0A7K?token=ram123",
       brandEditableFields: ["finalBudget"],
       approvedAt: d(19),
       approvedBy: "electronics.buyer@partner.com",
@@ -676,10 +684,10 @@ export function createMockBookings(): BookingIntake[] {
       lastUpdated: d(15),
     },
     {
-      id: "BK-NIVEA-REJ",
+      id: "B_YF2DRNT6BH8P",
       bookingName: "Nivea Winter Skincare",
       salesEmail: "omar.s@noon.com",
-      partnerLeCode: "LE-00998",
+      partnerLeCode: "LE1CKR5OAAE",
       brandCode: "nivea",
       advertiserType: "marketplace",
       advertiserCountry: "AE",
@@ -700,7 +708,7 @@ export function createMockBookings(): BookingIntake[] {
       audienceNotes: "",
       campaigns: [],
       status: "rejected",
-      approvalLink: "https://ads.noon.com/booking/approve/BK-NIVEA-REJ?token=mno345",
+      approvalLink: "https://ads.noon.com/booking/approve/B_YF2DRNT6BH8P?token=mno345",
       brandEditableFields: ["finalBudget"],
       approvedAt: null,
       approvedBy: "",
@@ -748,7 +756,7 @@ export const initialDraft: CampaignDraft = {
   bidAmount: 5,
   slotBids: {},
   usePerSlotBidding: false,
-  budgetType: "daily",
+  budgetType: "total",
   dailyBudget: 1000,
   totalBudget: 10000,
   pacing: "even",

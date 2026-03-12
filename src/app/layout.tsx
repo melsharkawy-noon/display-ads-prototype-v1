@@ -7,8 +7,8 @@ import { IntakeProvider } from "@/context/IntakeContext";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Display Ads - Create Campaign",
-  description: "Managed Display Ads Campaign Creation",
+  title: "Display Ads Prototype",
+  description: "Display Ads Booking & Campaign Builder Prototype",
 };
 
 export default function RootLayout({

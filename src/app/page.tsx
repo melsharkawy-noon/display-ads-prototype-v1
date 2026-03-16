@@ -62,6 +62,7 @@ export default function Home() {
       country,
       linkedBookingId: target.id,
       linkedBookingName: target.bookingName,
+      linkedBookingAdvertiserType: target.advertiserType || "",
     });
 
     setActiveTab("builder");

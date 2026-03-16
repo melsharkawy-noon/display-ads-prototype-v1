@@ -220,6 +220,7 @@ export interface CampaignDraft {
   // Booking linkage (set when campaign is created from a Booking)
   linkedBookingId: string;
   linkedBookingName: string;
+  linkedBookingAdvertiserType: AdvertiserType | "";
   
   // Attribution (Internal only)
   partnerIds: string[];
@@ -770,6 +771,7 @@ export const initialDraft: CampaignDraft = {
   campaignName: "",
   linkedBookingId: "",
   linkedBookingName: "",
+  linkedBookingAdvertiserType: "",
   partnerIds: [],
   attributionBrands: [],
   attributionCategories: [],

@@ -984,32 +984,63 @@ export function SinglePageFlow({ onCampaignSubmit }: SinglePageFlowProps) {
                 <Card>
                   <CardContent className="p-6">
                     <h2 className="text-lg font-semibold text-gray-900 mb-2">Campaign Type</h2>
-                    <p className="text-sm text-gray-500 mb-6">Select whether this is an endemic or non-endemic campaign</p>
-                    
-                    <div className="grid grid-cols-2 gap-4">
-                      <RadioCard
-                        selected={draft.campaignType === "internal"}
-                        onClick={() => updateDraft({ campaignType: "internal" })}
-                        title="Endemic"
-                        description="Campaign for marketplace brands and products with landing page builder access"
-                      >
-                        <div className="flex items-center gap-2 mt-2 text-primary-600">
-                          <Building2 className="w-5 h-5" />
-                          <span className="text-sm font-medium">Endemic</span>
+
+                    {isBookingLinked ? (
+                      <>
+                        <p className="text-sm text-gray-500 mb-4">Advertiser type is inherited from the linked booking and cannot be changed.</p>
+                        <div className={cn(
+                          "flex items-center gap-3 px-4 py-3 rounded-lg border",
+                          draft.campaignType === "internal" ? "border-primary-200 bg-primary-50/40" : "border-amber-200 bg-amber-50/40"
+                        )}>
+                          {draft.campaignType === "internal" ? (
+                            <div className="w-9 h-9 rounded-lg bg-primary-100 flex items-center justify-center">
+                              <Building2 className="w-4.5 h-4.5 text-primary-600" />
+                            </div>
+                          ) : (
+                            <div className="w-9 h-9 rounded-lg bg-amber-100 flex items-center justify-center">
+                              <Globe className="w-4.5 h-4.5 text-amber-600" />
+                            </div>
+                          )}
+                          <div>
+                            <p className="text-sm font-semibold text-gray-900">
+                              {draft.campaignType === "internal" ? "Endemic" : "Non-Endemic"}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              Inherited from Booking &middot; {draft.linkedBookingAdvertiserType === "3P" ? "3P" : draft.linkedBookingAdvertiserType === "marketplace" ? "Marketplace" : "1P"}
+                            </p>
+                          </div>
+                          <span className="ml-auto text-xs font-medium text-gray-400 uppercase tracking-wider">Read-only</span>
                         </div>
-                      </RadioCard>
-                      <RadioCard
-                        selected={draft.campaignType === "third_party"}
-                        onClick={() => updateDraft({ campaignType: "third_party" })}
-                        title="Non-Endemic"
-                        description="Campaign for external advertisers not selling on the marketplace"
-                      >
-                        <div className="flex items-center gap-2 mt-2 text-amber-600">
-                          <Globe className="w-5 h-5" />
-                          <span className="text-sm font-medium">Non-Endemic</span>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-sm text-gray-500 mb-6">Select whether this is an endemic or non-endemic campaign</p>
+                        <div className="grid grid-cols-2 gap-4">
+                          <RadioCard
+                            selected={draft.campaignType === "internal"}
+                            onClick={() => updateDraft({ campaignType: "internal" })}
+                            title="Endemic"
+                            description="Campaign for marketplace brands and products with landing page builder access"
+                          >
+                            <div className="flex items-center gap-2 mt-2 text-primary-600">
+                              <Building2 className="w-5 h-5" />
+                              <span className="text-sm font-medium">Endemic</span>
+                            </div>
+                          </RadioCard>
+                          <RadioCard
+                            selected={draft.campaignType === "third_party"}
+                            onClick={() => updateDraft({ campaignType: "third_party" })}
+                            title="Non-Endemic"
+                            description="Campaign for external advertisers not selling on the marketplace"
+                          >
+                            <div className="flex items-center gap-2 mt-2 text-amber-600">
+                              <Globe className="w-5 h-5" />
+                              <span className="text-sm font-medium">Non-Endemic</span>
+                            </div>
+                          </RadioCard>
                         </div>
-                      </RadioCard>
-                    </div>
+                      </>
+                    )}
                   </CardContent>
                 </Card>
               </section>
@@ -1230,7 +1261,7 @@ export function SinglePageFlow({ onCampaignSubmit }: SinglePageFlowProps) {
                     {isBookingLinked && (
                       <div className="mb-6 p-4 bg-primary-50/50 border border-primary-200 rounded-lg">
                         <p className="text-xs font-semibold text-primary-600 uppercase tracking-wider mb-3">Linked Booking</p>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-3 gap-4">
                           <div>
                             <label className="block text-xs font-medium text-gray-500 mb-1">Booking Code</label>
                             <div className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm font-mono text-gray-700">{draft.linkedBookingId}</div>
@@ -1238,6 +1269,12 @@ export function SinglePageFlow({ onCampaignSubmit }: SinglePageFlowProps) {
                           <div>
                             <label className="block text-xs font-medium text-gray-500 mb-1">Booking Name</label>
                             <div className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 truncate">{draft.linkedBookingName}</div>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">Advertiser Type</label>
+                            <div className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700">
+                              {draft.linkedBookingAdvertiserType === "3P" ? "Non-Endemic (3P)" : draft.linkedBookingAdvertiserType === "marketplace" ? "Marketplace" : "Endemic (1P)"}
+                            </div>
                           </div>
                         </div>
                       </div>

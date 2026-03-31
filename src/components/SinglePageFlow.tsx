@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useCampaign } from "@/context/CampaignContext";
+import { useAccount } from "@/context/AccountContext";
 import { Card, CardContent } from "@/components/ui/Card";
 import { RadioCard } from "@/components/ui/RadioCard";
 import { Input } from "@/components/ui/Input";
@@ -124,7 +125,9 @@ interface SinglePageFlowProps {
 
 export function SinglePageFlow({ onCampaignSubmit }: SinglePageFlowProps) {
   const { draft, updateDraft } = useCampaign();
+  const { activeAccount, getAgencyPartnerAccess } = useAccount();
   const isBookingLinked = !!draft.linkedBookingId;
+  const isAgencyAccount = activeAccount.type === "agency";
   const [activeSection, setActiveSection] = useState("entry");
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
 
@@ -361,8 +364,15 @@ export function SinglePageFlow({ onCampaignSubmit }: SinglePageFlowProps) {
 
   // Visible sections based on flow state
   // Landing page is optional - it doesn't block subsequent sections
+  const canContinueAsAgency =
+    !isAgencyAccount ||
+    draft.entryType !== "brand" ||
+    !!draft.partnerAccountId ||
+    isBookingLinked;
+
   const visibleSections = useMemo(() => {
     const sections = ["entry"];
+    if (!canContinueAsAgency) return sections;
     
     if (draft.entryType === "seller") {
       // Seller flow: Schedule -> Landing -> Targeting -> Bidding -> Creatives
@@ -403,7 +413,7 @@ export function SinglePageFlow({ onCampaignSubmit }: SinglePageFlowProps) {
     }
     
     return sections;
-  }, [draft, cptTotalHours]);
+  }, [draft, cptTotalHours, canContinueAsAgency]);
 
   // Scroll spy to update active section
   useEffect(() => {
@@ -478,9 +488,25 @@ export function SinglePageFlow({ onCampaignSubmit }: SinglePageFlowProps) {
                 onChange={(e) => {
                   const value = e.target.value as "seller" | "brand";
                   if (value === "seller") {
-                    updateDraft({ entryType: "seller", ownerType: "self_serve", landingPageMode: "builder", pricingModel: "cpm" });
+                    updateDraft({
+                      entryType: "seller",
+                      ownerType: "self_serve",
+                      landingPageMode: "builder",
+                      pricingModel: "cpm",
+                      ownerAccountId: activeAccount.id,
+                      ownerAccountName: activeAccount.name,
+                      partnerAccountId: activeAccount.type === "partner" ? activeAccount.id : "",
+                      partnerAccountName: activeAccount.type === "partner" ? activeAccount.name : "",
+                    });
                   } else {
-                    updateDraft({ entryType: "brand", ownerType: "ops_managed" });
+                    updateDraft({
+                      entryType: "brand",
+                      ownerType: "ops_managed",
+                      ownerAccountId: activeAccount.id,
+                      ownerAccountName: activeAccount.name,
+                      partnerAccountId: activeAccount.type === "partner" ? activeAccount.id : draft.partnerAccountId,
+                      partnerAccountName: activeAccount.type === "partner" ? activeAccount.name : draft.partnerAccountName,
+                    });
                   }
                 }}
                 className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium bg-white min-w-[140px]"
@@ -497,7 +523,16 @@ export function SinglePageFlow({ onCampaignSubmit }: SinglePageFlowProps) {
             </div>
             <div className="flex items-center gap-4">
               <Button variant="outline" size="sm">Save Draft</Button>
-              <Button size="sm" disabled={draft.entryType === "seller" ? visibleSections.length < 6 : visibleSections.length < 8} onClick={() => onCampaignSubmit?.()}>Submit Campaign</Button>
+              <Button
+                size="sm"
+                disabled={
+                  !canContinueAsAgency ||
+                  (draft.entryType === "seller" ? visibleSections.length < 6 : visibleSections.length < 8)
+                }
+                onClick={() => onCampaignSubmit?.()}
+              >
+                Submit Campaign
+              </Button>
             </div>
           </div>
         </div>
@@ -590,7 +625,7 @@ export function SinglePageFlow({ onCampaignSubmit }: SinglePageFlowProps) {
                 </Card>
               ) : (
                 <Card className={draft.entryType === "brand" ? "border-primary-200 bg-primary-50/30" : "border-amber-200 bg-amber-50/30"}>
-                  <CardContent className="p-4">
+                  <CardContent className="p-4 space-y-4">
                     <div className="flex items-center gap-3">
                       {draft.entryType === "brand" ? (
                         <div className="w-10 h-10 rounded-lg bg-primary-100 flex items-center justify-center">
@@ -612,6 +647,71 @@ export function SinglePageFlow({ onCampaignSubmit }: SinglePageFlowProps) {
                         </p>
                       </div>
                     </div>
+
+                    {draft.entryType === "brand" && (
+                      <div className="rounded-lg border border-gray-200 bg-white p-3">
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                          Account Context
+                        </p>
+                        <p className="text-sm text-gray-700">
+                          {activeAccount.type === "partner"
+                            ? `${activeAccount.code || "IDP"} | ${activeAccount.name}`
+                            : `${activeAccount.name} Agency Account`}
+                        </p>
+                      </div>
+                    )}
+
+                    {draft.entryType === "brand" && isAgencyAccount && !isBookingLinked && (
+                      <div className="rounded-lg border border-gray-200 bg-white p-3">
+                        <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                          Partner Account (required for agency campaigns)
+                        </label>
+                        <select
+                          value={draft.partnerAccountId}
+                          onChange={(e) => {
+                            const selected = getAgencyPartnerAccess(activeAccount.id).find(
+                              (rel) => rel.partnerAccountId === e.target.value
+                            );
+                            updateDraft({
+                              ownerAccountId: activeAccount.id,
+                              ownerAccountName: activeAccount.name,
+                              partnerAccountId: selected?.partnerAccountId || "",
+                              partnerAccountName: selected?.partnerAccountName || "",
+                            });
+                          }}
+                          className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white"
+                        >
+                          <option value="">Select partner...</option>
+                          {getAgencyPartnerAccess(activeAccount.id).map((rel) => {
+                            const isDisabled =
+                              rel.status !== "active" || rel.accessType !== "write";
+                            const reason =
+                              rel.status === "expired"
+                                ? "Access expired"
+                                : rel.status === "revoked"
+                                  ? "Access revoked"
+                                  : rel.accessType === "view"
+                                    ? "View-only access"
+                                    : "";
+                            return (
+                              <option
+                                key={rel.id}
+                                value={rel.partnerAccountId}
+                                disabled={isDisabled}
+                              >
+                                {rel.partnerAccountName}
+                                {reason ? ` — ${reason}` : ""}
+                              </option>
+                            );
+                          })}
+                        </select>
+                        {!draft.partnerAccountId && (
+                          <p className="text-xs text-amber-600 mt-2">
+                            Select a partner with active Write access to continue.
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               )}

@@ -7,6 +7,47 @@ export type BudgetType = "daily" | "total";
 export type Marketplace = "noon" | "supermall";
 export type AdType = "banner" | "interstitial" | "video_popup";
 
+// ─── Accounts & Access (Reporting) ────────────────────────────────────────────
+
+export type AccountType = "partner" | "agency";
+
+export interface Account {
+  id: string;
+  name: string;
+  type: AccountType;
+  code?: string; // e.g., IDP code like 9999
+}
+
+export type AccessType = "view" | "write";
+export type AccessStatus = "active" | "expired" | "revoked";
+export type AccessAdFormat = "PLA" | "Brand Ads" | "Display Ads";
+
+export interface AccessRelationship {
+  id: string;
+  partnerAccountId: string;
+  partnerAccountName: string;
+  partnerCode: string;
+  agencyAccountId: string;
+  agencyAccountName: string;
+  accessType: AccessType;
+  allowedFormats: AccessAdFormat[];
+  startDate: Date;
+  expiryDate: Date;
+  status: AccessStatus;
+  approver: string;
+  notes?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface AccessControlLogEntry {
+  id: string;
+  actor: string;
+  timestamp: Date;
+  action: string;
+  summary: string;
+}
+
 // Slot types with their dimensions per country
 export type SlotType = "mobile_hero" | "mobile_slim" | "desktop_hero" | "desktop_slim";
 
@@ -221,6 +262,11 @@ export interface CampaignDraft {
   linkedBookingId: string;
   linkedBookingName: string;
   linkedBookingAdvertiserType: AdvertiserType | "";
+  // Account context (partner/agency model)
+  ownerAccountId: string;
+  ownerAccountName: string;
+  partnerAccountId: string;
+  partnerAccountName: string;
   
   // Attribution (Internal only)
   partnerIds: string[];
@@ -307,6 +353,12 @@ export interface BookingCampaign {
   ctr: number;
   spend: number;
   createdAt: Date;
+  // Lightweight ownership metadata (used by Reporting)
+  ownerAccountId?: string;
+  ownerAccountName?: string;
+  partnerAccountId?: string;
+  partnerAccountName?: string;
+  createdByType?: "partner" | "agency";
 }
 
 export interface BookingIntake {
@@ -772,6 +824,10 @@ export const initialDraft: CampaignDraft = {
   linkedBookingId: "",
   linkedBookingName: "",
   linkedBookingAdvertiserType: "",
+  ownerAccountId: "",
+  ownerAccountName: "",
+  partnerAccountId: "",
+  partnerAccountName: "",
   partnerIds: [],
   attributionBrands: [],
   attributionCategories: [],

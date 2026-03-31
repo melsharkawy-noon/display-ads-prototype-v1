@@ -6,12 +6,15 @@ import { CalendarOverview } from "@/components/CalendarOverview";
 import { BookingsListPage } from "@/components/BookingsListPage";
 import { BookingDetailPage } from "@/components/BookingDetailPage";
 import { BrandPreviewPage } from "@/components/BrandPreviewPage";
+import { ReportingPage } from "@/components/ReportingPage";
+import { AccessControlPage } from "@/components/AccessControlPage";
 import { useIntake } from "@/context/IntakeContext";
 import { useCampaign } from "@/context/CampaignContext";
+import { useAccount } from "@/context/AccountContext";
 import { BookingCampaign } from "@/lib/types";
-import { PlusCircle, Calendar, LayoutGrid, BookOpen } from "lucide-react";
+import { PlusCircle, Calendar, LayoutGrid, BookOpen, BarChart2, Shield } from "lucide-react";
 
-type Tab = "builder" | "calendar" | "bookings";
+type Tab = "builder" | "calendar" | "bookings" | "reporting" | "access_control";
 
 export default function Home() {
   const [mounted, setMounted] = useState(false);
@@ -22,6 +25,7 @@ export default function Home() {
   const [highlightCampaignId, setHighlightCampaignId] = useState<string | null>(null);
   const { intake, bookings, selectBooking, createBooking, addCampaignToBooking } = useIntake();
   const { draft, updateDraft, resetDraft } = useCampaign();
+  const { activeAccount } = useAccount();
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -54,6 +58,14 @@ export default function Home() {
     const countryMap: Record<string, string> = { AE: "AE", SA: "SA", EG: "EG" };
     const country = countryMap[target.campaignCountry] || "AE";
 
+    const partnerByBrand: Record<string, { id: string; name: string }> = {
+      samsung: { id: "partner-samsung", name: "Samsung IDP" },
+      loreal: { id: "partner-loreal", name: "L’Oréal IDP" },
+      nestle: { id: "partner-nestle", name: "Nestlé IDP" },
+      apple: { id: "partner-apple", name: "Apple IDP" },
+    };
+    const inferredPartner = partnerByBrand[target.brandCode] || { id: "", name: "" };
+
     updateDraft({
       entryType: "brand",
       ownerType: "ops_managed",
@@ -63,10 +75,14 @@ export default function Home() {
       linkedBookingId: target.id,
       linkedBookingName: target.bookingName,
       linkedBookingAdvertiserType: target.advertiserType || "",
+      ownerAccountId: activeAccount.id,
+      ownerAccountName: activeAccount.name,
+      partnerAccountId: inferredPartner.id || draft.partnerAccountId || "",
+      partnerAccountName: inferredPartner.name || draft.partnerAccountName || "",
     });
 
     setActiveTab("builder");
-  }, [intake, bookings, resetDraft, updateDraft]);
+  }, [intake, bookings, resetDraft, updateDraft, activeAccount, draft.partnerAccountId, draft.partnerAccountName]);
 
   const handleCampaignSubmit = useCallback(() => {
     if (!draft.linkedBookingId) return;
@@ -87,6 +103,11 @@ export default function Home() {
       ctr: 0,
       spend: 0,
       createdAt: new Date(),
+      ownerAccountId: draft.ownerAccountId || activeAccount.id,
+      ownerAccountName: draft.ownerAccountName || activeAccount.name,
+      partnerAccountId: draft.partnerAccountId || "",
+      partnerAccountName: draft.partnerAccountName || "",
+      createdByType: activeAccount.type,
     };
 
     addCampaignToBooking(bookingId, newCampaign);
@@ -95,12 +116,14 @@ export default function Home() {
     setHighlightCampaignId(campaignId);
     setShowBookingDetail(false);
     setActiveTab("bookings");
-  }, [draft, addCampaignToBooking]);
+  }, [draft, addCampaignToBooking, activeAccount]);
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: "bookings", label: "Bookings", icon: <BookOpen className="w-4 h-4" /> },
     { id: "calendar", label: "Calendar Overview", icon: <Calendar className="w-4 h-4" /> },
     { id: "builder", label: "Campaign Builder", icon: <PlusCircle className="w-4 h-4" /> },
+    { id: "reporting", label: "Reporting", icon: <BarChart2 className="w-4 h-4" /> },
+    { id: "access_control", label: "Access Control", icon: <Shield className="w-4 h-4" /> },
   ];
 
   if (!mounted) return <div className="min-h-screen bg-gray-50" />;
@@ -146,6 +169,8 @@ export default function Home() {
 
       {activeTab === "builder" && <SinglePageFlow onCampaignSubmit={handleCampaignSubmit} />}
       {activeTab === "calendar" && <CalendarOverview />}
+      {activeTab === "reporting" && <ReportingPage />}
+      {activeTab === "access_control" && <AccessControlPage />}
       {activeTab === "bookings" && !showBookingDetail && (
         <BookingsListPage
           onOpenBooking={handleOpenBooking}
